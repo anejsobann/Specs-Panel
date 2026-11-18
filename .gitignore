@@ -1,0 +1,4 @@
+.dotnet-local/
+bin/
+obj/
+*.user
