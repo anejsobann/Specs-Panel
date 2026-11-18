@@ -274,7 +274,13 @@ internal sealed class Dashboard : Form
 
     private sealed record DisplayChoice(Screen Screen)
     {
-        public override string ToString() => $"{Screen.DeviceName.Replace(@"\\.\DISPLAY", "Zaslon ")} • {Screen.Bounds.Width}×{Screen.Bounds.Height}";
+        public override string ToString() => Screen.DeviceName switch
+        {
+            @"\\.\DISPLAY1" => "MAIN MONITOR",
+            @"\\.\DISPLAY2" => "ALT MONITOR",
+            @"\\.\DISPLAY3" => "TABLET",
+            _ => $"{Screen.DeviceName.Replace(@"\\.\DISPLAY", "Zaslon ")} • {Screen.Bounds.Width}×{Screen.Bounds.Height}"
+        };
     }
 
     private void ToggleFullscreen()
