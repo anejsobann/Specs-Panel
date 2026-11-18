@@ -1,6 +1,6 @@
 using LibreHardwareMonitor.Hardware;
 
-namespace SpecPanel;
+namespace SpecsPanel;
 
 internal sealed record Metric(string Group, string Device, string Name, float? Value, string Unit);
 

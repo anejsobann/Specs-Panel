@@ -1,4 +1,4 @@
-namespace SpecPanel;
+namespace SpecsPanel;
 
 internal sealed class Dashboard : Form
 {
@@ -22,7 +22,7 @@ internal sealed class Dashboard : Form
 
     public Dashboard()
     {
-        Text = "SpecPanel";
+        Text = "Specs Panel";
         ClientSize = new Size(1000, 620);
         MinimumSize = new Size(560, 370);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -39,7 +39,7 @@ internal sealed class Dashboard : Form
 
         var header = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         displays.Width = 220;
-        header.Controls.Add(new Label { Text = "SpecPanel", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 6, 16, 6) });
+        header.Controls.Add(new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 6, 16, 6) });
         header.Controls.Add(displays);
         fullscreen.BackColor = Surface;
         header.Controls.Add(fullscreen);

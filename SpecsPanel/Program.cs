@@ -1,4 +1,4 @@
-namespace SpecPanel;
+namespace SpecsPanel;
 
 static class Program
 {
