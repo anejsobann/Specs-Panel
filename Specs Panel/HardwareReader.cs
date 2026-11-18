@@ -1,4 +1,6 @@
 using LibreHardwareMonitor.Hardware;
+using LibreHardwareMonitor.PawnIo;
+using System.Security.Principal;
 
 namespace SpecsPanel;
 
@@ -6,6 +8,15 @@ internal sealed record Metric(string Group, string Device, string Name, float? V
 
 internal sealed class HardwareReader : IDisposable
 {
+    public static bool PawnIoInstalled => PawnIo.IsInstalled;
+    public static bool IsAdministrator { get; } = CheckAdministrator();
+
+    private static bool CheckAdministrator()
+    {
+        using var identity = WindowsIdentity.GetCurrent();
+        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
+    }
+
     private readonly Computer computer = new()
     {
         IsCpuEnabled = true,

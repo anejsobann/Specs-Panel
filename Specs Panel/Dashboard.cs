@@ -11,6 +11,14 @@ internal sealed class Dashboard : Form
     private readonly ComboBox displays = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190 };
     private readonly Button fullscreen = new() { Text = "Celozaslonsko", AutoSize = true, FlatStyle = FlatStyle.Flat };
     private readonly DataGridView details = new();
+    private readonly DataGridView processes = new();
+    private readonly TabControl tabs = new() { Dock = DockStyle.Fill };
+    private readonly ComboBox processSort = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+    private readonly Label processStatus = new() { Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly ProcessReader processReader = new();
+    private List<ProcessUsage> processUsage = [];
+    private bool samplingProcesses;
+    private readonly Button cpuHelp = new() { AutoSize = true, FlatStyle = FlatStyle.Flat, Visible = false };
     private readonly Label[] values = new Label[3];
     private readonly Label[] devices = new Label[3];
     private readonly HardwareReader reader = new();
@@ -20,7 +28,7 @@ internal sealed class Dashboard : Form
     private bool reading;
     private bool closing;
 
-    public Dashboard()
+    public Dashboard(string[] args)
     {
         Text = "Specs Panel";
         ClientSize = new Size(1000, 620);
@@ -30,11 +38,9 @@ internal sealed class Dashboard : Form
         ForeColor = Ink;
         Font = new Font("Segoe UI", 11);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 4 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 2 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         Controls.Add(layout);
 
         var header = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
@@ -44,6 +50,17 @@ internal sealed class Dashboard : Form
         fullscreen.BackColor = Surface;
         header.Controls.Add(fullscreen);
         layout.Controls.Add(header, 0, 0);
+
+        var specsPage = new TabPage("System Specs") { BackColor = Background, Padding = new Padding(4) };
+        var processPage = new TabPage("Processes") { BackColor = Background, Padding = new Padding(4) };
+        tabs.TabPages.AddRange([specsPage, processPage]);
+        layout.Controls.Add(tabs, 0, 1);
+        var specs = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+        specs.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
+        specs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        specs.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        specs.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        specsPage.Controls.Add(specs);
 
         var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
         cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -62,44 +79,26 @@ internal sealed class Dashboard : Form
             card.Controls.Add(devices[index], 0, 2);
             cards.Controls.Add(card, index, 0);
         }
-        layout.Controls.Add(cards, 0, 1);
+        specs.Controls.Add(cards, 0, 0);
 
-        details.Dock = DockStyle.Fill;
-        details.ReadOnly = true;
-        details.AllowUserToAddRows = false;
-        details.AllowUserToDeleteRows = false;
-        details.RowHeadersVisible = false;
-        details.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-        details.BackgroundColor = Surface;
-        details.BorderStyle = BorderStyle.None;
-        details.GridColor = Background;
-        details.EnableHeadersVisualStyles = false;
-        details.ColumnHeadersDefaultCellStyle.BackColor = Surface;
-        details.ColumnHeadersDefaultCellStyle.ForeColor = Ink;
-        details.DefaultCellStyle.BackColor = Background;
-        details.DefaultCellStyle.ForeColor = Ink;
-        details.RowTemplate.Height = 28;
-        foreach (var (name, width) in new[] { ("Skupina", 17), ("Naprava", 33), ("Senzor", 32), ("Meritev", 18) })
-        {
-            details.Columns.Add(new DataGridViewTextBoxColumn
-            {
-                HeaderText = name,
-                FillWeight = width,
-                SortMode = DataGridViewColumnSortMode.NotSortable
-            });
-        }
-        layout.Controls.Add(details, 0, 2);
-        layout.Controls.Add(status, 0, 3);
+        ConfigureGrid(details, ("Skupina", 17), ("Naprava", 33), ("Senzor", 32), ("Meritev", 18));
+        specs.Controls.Add(details, 0, 1);
+        cpuHelp.BackColor = Surface;
+        cpuHelp.Click += (_, _) => OpenCpuHelp();
+        specs.Controls.Add(cpuHelp, 0, 2);
+        specs.Controls.Add(status, 0, 3);
+        ConfigureProcesses(processPage);
 
         displays.DropDown += (_, _) => RefreshDisplays();
         fullscreen.Click += (_, _) => ToggleFullscreen();
-        timer.Tick += async (_, _) => await RefreshMetrics();
+        timer.Tick += async (_, _) => await RefreshDashboard();
         Shown += async (_, _) =>
         {
             RefreshDisplays();
+            RestoreView(args);
             status.Text = "Iskanje senzorjev …";
             timer.Start();
-            await RefreshMetrics();
+            await RefreshDashboard();
         };
         FormClosed += (_, _) =>
         {
@@ -108,6 +107,157 @@ internal sealed class Dashboard : Form
             if (!reading)
                 reader.Dispose();
         };
+    }
+
+    private static void ConfigureGrid(DataGridView grid, params (string Name, int Width)[] columns)
+    {
+        grid.Dock = DockStyle.Fill;
+        grid.ReadOnly = true;
+        grid.AllowUserToAddRows = false;
+        grid.AllowUserToDeleteRows = false;
+        grid.RowHeadersVisible = false;
+        grid.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
+        grid.BackgroundColor = Surface;
+        grid.BorderStyle = BorderStyle.None;
+        grid.GridColor = Background;
+        grid.EnableHeadersVisualStyles = false;
+        grid.ColumnHeadersDefaultCellStyle.BackColor = Surface;
+        grid.ColumnHeadersDefaultCellStyle.ForeColor = Ink;
+        grid.DefaultCellStyle.BackColor = Background;
+        grid.DefaultCellStyle.ForeColor = Ink;
+        grid.RowTemplate.Height = 28;
+        foreach (var (name, width) in columns)
+            grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = name, FillWeight = width, SortMode = DataGridViewColumnSortMode.NotSortable });
+    }
+
+    private void ConfigureProcesses(TabPage page)
+    {
+        var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        panel.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        page.Controls.Add(panel);
+
+        var filter = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
+        filter.Controls.Add(new Label { Text = "Razvrsti po", AutoSize = true, Margin = new Padding(4, 6, 8, 4) });
+        filter.Controls.Add(processSort);
+        processSort.Items.AddRange(["CPU", "RAM", "I/O"]);
+        processSort.SelectedIndex = 0;
+        processSort.SelectedIndexChanged += (_, _) => RenderProcesses();
+        panel.Controls.Add(filter, 0, 0);
+        ConfigureGrid(processes, ("Proces", 44), ("PID", 12), ("CPU (%)", 14), ("RAM (MiB)", 15), ("I/O (MiB/s)", 15));
+        processes.ColumnHeaderMouseClick += (_, eventArgs) =>
+        {
+            if (eventArgs.ColumnIndex is >= 2 and <= 4)
+                processSort.SelectedIndex = eventArgs.ColumnIndex - 2;
+        };
+        panel.Controls.Add(processes, 0, 1);
+        processStatus.Text = "Zbiranje prvih meritev …";
+        panel.Controls.Add(processStatus, 0, 2);
+    }
+
+    private async Task RefreshDashboard()
+    {
+        if (LocalUpdate.TryRestart(ViewArguments()))
+        {
+            Close();
+            return;
+        }
+        await Task.WhenAll(RefreshMetrics(), RefreshProcesses());
+    }
+
+    private async Task RefreshProcesses()
+    {
+        if (samplingProcesses)
+            return;
+        samplingProcesses = true;
+        try
+        {
+            var snapshot = await Task.Run(processReader.Read);
+            if (closing)
+                return;
+            processUsage = snapshot;
+            RenderProcesses();
+            processStatus.Text = $"{snapshot.Count} procesov  •  {DateTime.Now:HH:mm:ss}";
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            if (!closing)
+                processStatus.Text = "Windows trenutno ne more prebrati procesov.";
+        }
+        finally
+        {
+            samplingProcesses = false;
+        }
+    }
+
+    private void RenderProcesses()
+    {
+        var sort = processSort.SelectedIndex;
+        var ordered = processUsage.OrderByDescending(row => sort switch
+        {
+            1 => row.MemoryMiB,
+            2 => row.IoMiBPerSecond,
+            _ => row.Cpu
+        }).ThenBy(row => row.Id).ToArray();
+        SetRowCount(processes, ordered.Length);
+        for (var index = 0; index < ordered.Length; index++)
+        {
+            var row = ordered[index];
+            processes.Rows[index].SetValues(row.Name, row.Id, Number(row.Cpu), Number(row.MemoryMiB), Number(row.IoMiBPerSecond));
+        }
+    }
+
+    private static void SetRowCount(DataGridView grid, int count)
+    {
+        while (grid.Rows.Count > count)
+            grid.Rows.RemoveAt(grid.Rows.Count - 1);
+        if (grid.Rows.Count < count)
+            grid.Rows.Add(count - grid.Rows.Count);
+    }
+
+    private static string Number(double? value) => value?.ToString("0.0") ?? "—";
+
+    private string[] ViewArguments() =>
+        [tabs.SelectedIndex.ToString(), Screen.FromControl(this).DeviceName, full ? "fullscreen" : "window"];
+
+    private void RestoreView(string[] args)
+    {
+        if (args.Length != 3)
+            return;
+        tabs.SelectedIndex = args[0] == "1" ? 1 : 0;
+        var display = displays.Items.OfType<DisplayChoice>().FirstOrDefault(choice => choice.Screen.DeviceName == args[1]);
+        if (display is null)
+            return;
+        displays.SelectedItem = display;
+        if (args[2] == "fullscreen")
+            ToggleFullscreen();
+        else if (Screen.FromControl(this).DeviceName != display.Screen.DeviceName)
+            Location = display.Screen.WorkingArea.Location;
+    }
+
+    private void OpenCpuHelp()
+    {
+        try
+        {
+            var start = HardwareReader.PawnIoInstalled
+                ? new System.Diagnostics.ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true, Verb = "runas" }
+                : new System.Diagnostics.ProcessStartInfo("https://github.com/namazso/PawnIO.Setup/releases") { UseShellExecute = true };
+            if (HardwareReader.PawnIoInstalled)
+                foreach (var argument in ViewArguments())
+                    start.ArgumentList.Add(argument);
+            using var started = System.Diagnostics.Process.Start(start);
+            if (HardwareReader.PawnIoInstalled && started is not null)
+                Close();
+        }
+        catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
+        {
+            status.Text = "Skrbniški zagon je bil preklican.";
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            status.Text = "Pomoči za temperaturo CPU ni bilo mogoče odpreti.";
+        }
     }
 
     private void RefreshDisplays()
@@ -171,19 +321,20 @@ internal sealed class Dashboard : Form
             var metrics = await Task.Run(reader.Read);
             if (closing)
                 return;
-            UpdateCard(0, metrics, "CPU", "°C", "CPU Package", "Core (Tctl/Tdie)", "Core Average", "Core Max");
+            var cpuAvailable = UpdateCard(0, metrics, "CPU", "°C", "CPU Package", "Core (Tctl/Tdie)", "Core (Tdie)", "Core (Tctl)", "Core Average", "Core Max");
             UpdateCard(1, metrics, "GPU", "°C", "GPU Core");
             UpdateCard(2, metrics, "RAM", "%", "Memory");
-            while (details.Rows.Count > metrics.Count)
-                details.Rows.RemoveAt(details.Rows.Count - 1);
-            while (details.Rows.Count < metrics.Count)
-                details.Rows.Add();
+            SetRowCount(details, metrics.Count);
             for (var index = 0; index < metrics.Count; index++)
             {
                 var metric = metrics[index];
                 details.Rows[index].SetValues(metric.Group, metric.Device, metric.Name, Format(metric));
             }
-            status.Text = metrics.Any(metric => metric.Value.HasValue)
+            cpuHelp.Visible = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
+            cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Zaženi kot skrbnik za temperaturo CPU" : "Odpri uradni gonilnik PawnIO za temperaturo CPU";
+            status.Text = !cpuAvailable && !cpuHelp.Visible
+                ? "Temperaturni senzor CPU ni vrnil podatka."
+                : metrics.Any(metric => metric.Value.HasValue)
                 ? $"Zadnja meritev ob {DateTime.Now:HH:mm:ss}"
                 : "Meritve niso na voljo.";
         }
@@ -200,7 +351,7 @@ internal sealed class Dashboard : Form
         }
     }
 
-    private void UpdateCard(int index, List<Metric> metrics, string group, string unit, params string[] preferredNames)
+    private bool UpdateCard(int index, List<Metric> metrics, string group, string unit, params string[] preferredNames)
     {
         var options = metrics.Where(metric => metric.Group == group).ToArray();
         var available = options.Where(metric => metric.Unit == unit && metric.Value.HasValue &&
@@ -210,6 +361,7 @@ internal sealed class Dashboard : Form
             ?? available.MaxBy(metric => metric.Value);
         values[index].Text = selected is null ? "—" : Format(selected);
         devices[index].Text = selected?.Device ?? options.FirstOrDefault()?.Device ?? "Ni podatka";
+        return selected is not null;
     }
 
     private static string Format(Metric metric) => metric.Value is float value ? $"{value:0.#} {metric.Unit}" : "—";

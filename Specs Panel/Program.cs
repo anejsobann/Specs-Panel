@@ -3,9 +3,9 @@ namespace SpecsPanel;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new Dashboard());
+        Application.Run(new Dashboard(args));
     }    
 }
