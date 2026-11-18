@@ -4,7 +4,7 @@ Windows nadzorna plošča za spremljanje računalnika na dodatnem zaslonu.
 
 ## Zagon
 
-V tej mapi zaženi `dotnet run --project SpecsPanel` z .NET 10 SDK.
+V tej mapi zaženi `dotnet run --project "Specs Panel"` z .NET 10 SDK.
 
 1. Poveži Samsung tablico prek spacedeska.
 2. V nastavitvah zaslona v Windows izberi **Razširi te zaslone**. Z gumbom **Prepoznaj** preveri številko tablice.
