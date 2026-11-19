@@ -6,9 +6,9 @@ Windows dashboard for monitoring your PC on a second display, including any tabl
 
 *Dashboard preview with sample readings.*
 
-## Getting started
+## Download and run
 
-Run `./Publish-Local.ps1` in PowerShell with the .NET 10 SDK, then open the `SpecsPanel.exe` at the printed path. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+On a Windows x64 PC, download the asset ending in `-win-x64.zip` from the [latest release](https://github.com/anejsobann/Specs-Panel/releases/latest). Extract the entire ZIP to a folder and open `SpecsPanel.exe`. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
 
 1. Connect your tablet as a second display. [spacedesk](https://www.spacedesk.net/download/) offers viewers for Android tablets, iPads, and Windows tablets. You can also use another display solution that adds an extended display to Windows.
 2. In Windows display settings, choose **Extend these displays**. Use **Identify** to check the tablet's display number.
@@ -30,6 +30,6 @@ Click or tap the **Specs Panel** title and choose **Test Temperature Alert** to 
 
 [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) uses the [PawnIO](https://github.com/namazso/PawnIO.Setup/releases) driver on supported Ryzen processors. If the driver is missing, use the download button under **System Specs**.
 
-## Automatic local updates
+## Build from source
 
-After `./Publish-Local.ps1` builds successfully, an open instance running with administrator access automatically switches to the new build and keeps its selected tab, display, and fullscreen mode. The script creates a separate directory for each build under `Specs Panel/bin/Local`.
+With the .NET 10 SDK installed, run `./Publish-Local.ps1` in PowerShell and open the `SpecsPanel.exe` at the printed path. The script creates a separate directory for each build under `Specs Panel/bin/Local`. An open instance running with administrator access automatically switches to a newer local build and keeps its selected tab, display, and fullscreen mode.
