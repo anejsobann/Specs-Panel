@@ -31,6 +31,7 @@ internal sealed class Dashboard : Form
     public Dashboard(string[] args)
     {
         Text = "Specs Panel";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         ClientSize = new Size(1000, 620);
         MinimumSize = new Size(560, 370);
         AutoScaleMode = AutoScaleMode.Dpi;
