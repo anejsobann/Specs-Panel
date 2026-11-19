@@ -1,23 +1,23 @@
 # Specs Panel
 
-Windows nadzorna plošča za spremljanje računalnika na dodatnem zaslonu.
+Windows dashboard for monitoring your PC on a second display.
 
-## Zagon
+## Getting started
 
-Zaženi `./Publish-Local.ps1` v PowerShellu z .NET 10 SDK, nato odpri izpisano datoteko `SpecsPanel.exe`. Ob zagonu potrdi poziv UAC, če ga Windows prikaže. Aplikacija dobi skrbniške pravice ob zagonu za branje temperaturnih senzorjev CPU-ja.
+Run `./Publish-Local.ps1` in PowerShell with the .NET 10 SDK, then open the `SpecsPanel.exe` at the printed path. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
 
-1. Poveži Samsung tablico prek spacedeska.
-2. V nastavitvah zaslona v Windows izberi **Razširi te zaslone**. Z gumbom **Prepoznaj** preveri številko tablice.
-3. V aplikaciji Specs Panel izberi ta zaslon in klikni **Celozaslonsko**. Za vrnitev v okno pritisni **Esc** ali **F11**.
+1. Connect your Samsung tablet through spacedesk.
+2. In Windows display settings, choose **Extend these displays**. Use **Identify** to check the tablet's display number.
+3. Select the tablet in Specs Panel and click **Fullscreen**. Press **Esc** or **F11** to return to windowed mode.
 
-**System Specs** prikazuje tri kartice za CPU, GPU in RAM, z glavno meritvijo in grafom zadnjih 60 sekund.
+**System Specs** shows CPU, GPU, and RAM cards with live readings and charts covering the last 60 seconds.
 
-**Processes** prikazuje posamezne procese in njihov PID. Razvrsti jih po deležu skupne zmogljivosti CPU-ja, fizičnem pomnilniku (working set) ali hitrosti branja in pisanja I/O, ki lahko vključuje tudi omrežje in druge naprave. CPU in I/O potrebujeta dva vzorca. Črtica pomeni, da meritev trenutno ni na voljo.
+**Processes** lists running processes and their PIDs. Sort by share of total CPU capacity, physical memory (working set), or read and write I/O throughput, which can include network and other devices. CPU and I/O rates need two samples. A dash indicates an unavailable reading.
 
-**Sensors** prikazuje podrobne odčitke, vključno z matično ploščo, diski, frekvencami in ventilatorji, kadar so na voljo.
+**Sensors** shows detailed readings for your motherboard, drives, clock speeds, and fans when available.
 
-Na podprtih procesorjih Ryzen [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) uporablja gonilnik [PawnIO](https://github.com/namazso/PawnIO.Setup/releases). Če gonilnik manjka, ga lahko odpreš z gumbom v zavihku **System Specs**.
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) uses the [PawnIO](https://github.com/namazso/PawnIO.Setup/releases) driver on supported Ryzen processors. If the driver is missing, use the download button under **System Specs**.
 
-## Samodejni prevzem lokalnih gradenj
+## Automatic local updates
 
-Po uspešni gradnji s skriptom `./Publish-Local.ps1` odprto okno aplikacije, ki že teče s skrbniškimi pravicami, samodejno preklopi na novo različico in ohrani izbrani zavihek, zaslon ter celozaslonski način. Skript za vsako gradnjo ustvari ločeno mapo pod `Specs Panel/bin/Local`.
+After `./Publish-Local.ps1` builds successfully, an open instance running with administrator access automatically switches to the new build and keeps its selected tab, display, and fullscreen mode. The script creates a separate directory for each build under `Specs Panel/bin/Local`.

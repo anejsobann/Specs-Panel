@@ -13,7 +13,7 @@ internal sealed class MetricCard : Control
     private readonly string unit;
     private readonly string readingLabel;
     private readonly Queue<(long Timestamp, float? Value)> history = new();
-    private string device = "Iskanje naprave …";
+    private string device = "Detecting device…";
     private string detail = "—";
     private float? value;
 
@@ -22,7 +22,7 @@ internal sealed class MetricCard : Control
         this.title = title;
         this.unit = unit;
         this.accent = accent;
-        readingLabel = unit == "%" ? "ZASEDENOST" : "TEMPERATURA";
+        readingLabel = unit == "%" ? "USAGE" : "TEMPERATURE";
         AccessibleName = title;
         Dock = DockStyle.Fill;
         Margin = new Padding(0, 0, 10, 0);
@@ -41,7 +41,7 @@ internal sealed class MetricCard : Control
         value = next;
         device = deviceName;
         detail = detailText;
-        AccessibleDescription = $"{device}, {readingLabel.ToLowerInvariant()} {(value is float measurement ? $"{measurement:0.#} {unit}" : "ni na voljo")}, {detail}";
+        AccessibleDescription = $"{device}, {readingLabel.ToLowerInvariant()} {(value is float measurement ? $"{measurement:0.#} {unit}" : "unavailable")}, {detail}";
         Invalidate();
     }
 
@@ -71,7 +71,7 @@ internal sealed class MetricCard : Control
         DrawText(canvas, readingLabel, Subtle, 10.5f * scale, FontStyle.Bold,
             new(pad, 88 * scale, bodyWidth, 18 * scale));
         DrawText(canvas, value is float measurement ? $"{measurement:0.#} {unit}" : "—", TextColor,
-            46 * scale, FontStyle.Bold, new(pad, 106 * scale, bodyWidth, 65 * scale), "Segoe UI");
+            46 * scale, FontStyle.Bold, new(pad, 106 * scale, bodyWidth, 65 * scale));
         DrawText(canvas, detail, accent, 12 * scale, FontStyle.Regular,
             new(pad, 173 * scale, bodyWidth, 25 * scale));
 
@@ -80,7 +80,7 @@ internal sealed class MetricCard : Control
         if (plotBottom > plotTop + 8)
         {
             DrawHistory(canvas, new(pad, plotTop, bodyWidth, plotBottom - plotTop), scale);
-            DrawText(canvas, "ZADNJIH 60 S", Subtle, 10.5f * scale, FontStyle.Bold,
+            DrawText(canvas, "LAST 60 SECONDS", Subtle, 10.5f * scale, FontStyle.Bold,
                 new(pad, plotBottom + 10 * scale, bodyWidth, 20 * scale));
         }
     }
@@ -153,9 +153,9 @@ internal sealed class MetricCard : Control
     }
 
     private static void DrawText(Graphics canvas, string text, Color color, float size, FontStyle style,
-        RectangleF bounds, string family = "Consolas")
+        RectangleF bounds)
     {
-        using var font = new Font(family, size, style, GraphicsUnit.Pixel);
+        using var font = new Font("Bahnschrift", size, style, GraphicsUnit.Pixel);
         TextRenderer.DrawText(canvas, text, font, Rectangle.Round(bounds), color,
             TextFormatFlags.NoPrefix | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine |
             TextFormatFlags.NoPadding | TextFormatFlags.VerticalCenter);

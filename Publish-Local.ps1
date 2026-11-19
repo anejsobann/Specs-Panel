@@ -5,7 +5,7 @@ $release = 'release-{0}-{1}' -f [DateTime]::UtcNow.ToString('yyyyMMddHHmmssfffff
 $destination = Join-Path $releases $release
 
 dotnet publish $project -c Release -o $destination
-if ($LASTEXITCODE -ne 0) { throw "dotnet publish ni uspel ($LASTEXITCODE)." }
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed ($LASTEXITCODE)." }
 
 $marker = Join-Path $releases 'latest.txt'
 $lock = [IO.File]::Open((Join-Path $releases 'publish.lock'), 'OpenOrCreate', 'ReadWrite', 'None')

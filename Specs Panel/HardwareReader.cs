@@ -44,8 +44,8 @@ internal sealed class HardwareReader : IDisposable
                 HardwareType.Cpu => "CPU",
                 HardwareType.GpuAmd or HardwareType.GpuIntel or HardwareType.GpuNvidia => "GPU",
                 HardwareType.Memory => "RAM",
-                HardwareType.Storage => "Diski",
-                HardwareType.Motherboard => "Matična plošča",
+                HardwareType.Storage => "Drives",
+                HardwareType.Motherboard => "Motherboard",
                 _ => null
             };
 
@@ -88,7 +88,7 @@ internal sealed class HardwareReader : IDisposable
             ReadDevice(child, group, name, metrics);
 
         if (count == metrics.Count)
-            metrics.Add(new(group, name, "Senzorji niso na voljo", null, ""));
+            metrics.Add(new(group, name, "No sensors available", null, ""));
     }
 
     public void Dispose() => computer.Close();

@@ -8,10 +8,10 @@ internal sealed class Dashboard : Form
     private static readonly Color Muted = Color.FromArgb(163, 180, 202);
     private static readonly Color Accent = Color.FromArgb(99, 241, 209);
     private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly Button displays = new() { Text = "Zaslon  ▾", AutoSize = true, MinimumSize = new Size(165, 0), TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Button displays = new() { Text = "Display  ▾", AutoSize = true, MinimumSize = new Size(165, 0), TextAlign = ContentAlignment.MiddleLeft };
     private readonly ContextMenuStrip displayMenu = new() { ShowImageMargin = false, ShowCheckMargin = true };
     private Screen? selectedDisplay;
-    private readonly Button fullscreen = new() { Text = "Celozaslonsko", AutoSize = true, FlatStyle = FlatStyle.Flat };
+    private readonly Button fullscreen = new() { Text = "Fullscreen", AutoSize = true, FlatStyle = FlatStyle.Flat };
     private readonly DataGridView details = new();
     private readonly DataGridView processes = new();
     private readonly Panel[] pages = [new(), new(), new()];
@@ -42,7 +42,7 @@ internal sealed class Dashboard : Form
         AutoScaleMode = AutoScaleMode.Dpi;
         BackColor = Background;
         ForeColor = Ink;
-        Font = new Font("Segoe UI", 11);
+        Font = new Font("Bahnschrift", 11);
 
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18, 12, 18, 8), ColumnCount = 1, RowCount = 4 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -55,10 +55,13 @@ internal sealed class Dashboard : Form
         header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.Controls.Add(new Label { Text = "Specs Panel", AutoSize = true, Font = new Font("Segoe UI", 19, FontStyle.Bold), Anchor = AnchorStyles.Left, Margin = Padding.Empty }, 0, 0);
+        header.Controls.Add(new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold), Anchor = AnchorStyles.Left, Margin = Padding.Empty }, 0, 0);
         StyleButton(displays);
-        displayMenu.Renderer = new ToolStripProfessionalRenderer(new DisplayMenuColors());
+        displays.AccessibleName = "Select display";
+        displayMenu.Renderer = new DisplayMenuRenderer();
         displayMenu.ForeColor = Ink;
+        displayMenu.Font = Font;
+        displayMenu.Padding = new Padding(3);
         displays.Anchor = AnchorStyles.Left;
         header.Controls.Add(displays, 1, 0);
         StyleButton(fullscreen);
@@ -98,7 +101,7 @@ internal sealed class Dashboard : Form
         cards.Controls.Add(ram, 2, 0);
         specs.Controls.Add(cards, 0, 0);
 
-        ConfigureGrid(details, ("Skupina", 17), ("Naprava", 33), ("Senzor", 32), ("Meritev", 18));
+        ConfigureGrid(details, ("Group", 17), ("Device", 33), ("Sensor", 32), ("Reading", 18));
         pages[2].Controls.Add(details);
         StyleButton(cpuHelp);
         cpuHelp.Click += (_, _) => OpenCpuHelp();
@@ -114,7 +117,7 @@ internal sealed class Dashboard : Form
         {
             RefreshDisplays();
             RestoreView(args);
-            status.Text = "Iskanje senzorjev …";
+            status.Text = "Detecting sensors…";
             timer.Start();
             await RefreshDashboard();
         };
@@ -172,7 +175,7 @@ internal sealed class Dashboard : Form
             navigation[page].ForeColor = active ? Accent : Muted;
             navigation[page].BackColor = active ? Color.FromArgb(17, 48, 51) : Surface;
             navigation[page].FlatAppearance.BorderColor = active ? Accent : Color.FromArgb(55, 73, 96);
-            navigation[page].AccessibleDescription = active ? "Izbrani zavihek" : "";
+            navigation[page].AccessibleDescription = active ? "Selected tab" : "";
         }
     }
 
@@ -211,21 +214,22 @@ internal sealed class Dashboard : Form
         page.Controls.Add(panel);
 
         var filter = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        filter.Controls.Add(new Label { Text = "Razvrsti po", AutoSize = true, Margin = new Padding(4, 6, 8, 4) });
+        filter.Controls.Add(new Label { Text = "Sort by", AutoSize = true, Margin = new Padding(4, 6, 8, 4) });
         filter.Controls.Add(processSort);
         StylePicker(processSort);
+        processSort.AccessibleName = "Sort processes by";
         processSort.Items.AddRange(["CPU", "RAM", "I/O"]);
         processSort.SelectedIndex = 0;
         processSort.SelectedIndexChanged += (_, _) => RenderProcesses();
         panel.Controls.Add(filter, 0, 0);
-        ConfigureGrid(processes, ("Proces", 44), ("PID", 12), ("CPU (%)", 14), ("RAM (MiB)", 15), ("I/O (MiB/s)", 15));
+        ConfigureGrid(processes, ("Process", 44), ("PID", 12), ("CPU (%)", 14), ("RAM (MiB)", 15), ("I/O (MiB/s)", 15));
         processes.ColumnHeaderMouseClick += (_, eventArgs) =>
         {
             if (eventArgs.ColumnIndex is >= 2 and <= 4)
                 processSort.SelectedIndex = eventArgs.ColumnIndex - 2;
         };
         panel.Controls.Add(processes, 0, 1);
-        processStatus.Text = "Zbiranje prvih meritev …";
+        processStatus.Text = "Collecting process data…";
         panel.Controls.Add(processStatus, 0, 2);
     }
 
@@ -251,12 +255,13 @@ internal sealed class Dashboard : Form
                 return;
             processUsage = snapshot;
             RenderProcesses();
-            processStatus.Text = $"{snapshot.Count} procesov  •  {DateTime.Now:HH:mm:ss}";
+            var countLabel = snapshot.Count == 1 ? "process" : "processes";
+            processStatus.Text = $"{snapshot.Count} {countLabel}  •  {DateTime.Now:HH:mm:ss}";
         }
         catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
             if (!closing)
-                processStatus.Text = "Windows trenutno ne more prebrati procesov.";
+                processStatus.Text = "Windows couldn't read the process list.";
         }
         finally
         {
@@ -326,11 +331,11 @@ internal sealed class Dashboard : Form
         }
         catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
         {
-            status.Text = "Skrbniški zagon je bil preklican.";
+            status.Text = "Administrator startup was cancelled.";
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            status.Text = "Pomoči za temperaturo CPU ni bilo mogoče odpreti.";
+            status.Text = "Couldn't open CPU temperature help.";
         }
     }
 
@@ -364,13 +369,39 @@ internal sealed class Dashboard : Form
             var item = new ToolStripMenuItem(new DisplayChoice(screen).ToString())
             {
                 Checked = screen.DeviceName == selectedDisplay?.DeviceName,
-                ForeColor = Ink
+                ForeColor = Ink,
+                Padding = new Padding(4, 6, 12, 6)
             };
             item.Click += (_, _) => SelectDisplay(screen);
             displayMenu.Items.Add(item);
         }
         if (displayMenu.Items.Count > 0)
+        {
+            displayMenu.MinimumSize = new Size(displays.Width, 0);
             displayMenu.Show(displays, new Point(0, displays.Height));
+        }
+    }
+
+    private sealed class DisplayMenuRenderer() : ToolStripProfessionalRenderer(new DisplayMenuColors())
+    {
+        protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs args)
+        {
+            var bounds = args.ImageRectangle;
+            var markSize = Math.Min(bounds.Width, bounds.Height);
+            if (markSize < 4)
+                return;
+
+            float x = bounds.Left + bounds.Width / 2f;
+            float y = bounds.Top + bounds.Height / 2f;
+            using var pen = new Pen(Accent, Math.Max(1.5f, markSize / 8f))
+            {
+                StartCap = System.Drawing.Drawing2D.LineCap.Round,
+                EndCap = System.Drawing.Drawing2D.LineCap.Round,
+                LineJoin = System.Drawing.Drawing2D.LineJoin.Round
+            };
+            args.Graphics.DrawLine(pen, x - markSize * .28f, y, x - markSize * .08f, y + markSize * .18f);
+            args.Graphics.DrawLine(pen, x - markSize * .08f, y + markSize * .18f, x + markSize * .3f, y - markSize * .2f);
+        }
     }
 
     private sealed class DisplayMenuColors : ProfessionalColorTable
@@ -391,7 +422,7 @@ internal sealed class Dashboard : Form
             @"\\.\DISPLAY1" => "MAIN MONITOR",
             @"\\.\DISPLAY2" => "ALT MONITOR",
             @"\\.\DISPLAY10" => "TABLET",
-            _ => $"{Screen.DeviceName.Replace(@"\\.\DISPLAY", "Zaslon ")} • {Screen.Bounds.Width}×{Screen.Bounds.Height}"
+            _ => $"{Screen.DeviceName.Replace(@"\\.\DISPLAY", "Display ")} • {Screen.Bounds.Width}×{Screen.Bounds.Height}"
         };
     }
 
@@ -416,7 +447,7 @@ internal sealed class Dashboard : Form
             Bounds = screen.Bounds;
         }
         full = !full;
-        fullscreen.Text = full ? "Zapri celozaslonski prikaz" : "Celozaslonsko";
+        fullscreen.Text = full ? "Exit Fullscreen" : "Fullscreen";
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -448,17 +479,17 @@ internal sealed class Dashboard : Form
             }
             var showCpuHelp = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
             cpuHelp.Visible = showCpuHelp;
-            cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Zaženi kot skrbnik za temperaturo CPU" : "Odpri uradni gonilnik PawnIO za temperaturo CPU";
+            cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Run as administrator to read CPU temperature" : "Download PawnIO for CPU temperature";
             status.Text = !cpuAvailable && !showCpuHelp
-                ? "Temperaturni senzor CPU ni vrnil podatka."
+                ? "CPU temperature sensor returned no reading."
                 : metrics.Any(metric => metric.Value.HasValue)
-                ? $"Zadnja meritev ob {DateTime.Now:HH:mm:ss}"
-                : "Meritve niso na voljo.";
+                ? $"Last updated at {DateTime.Now:HH:mm:ss}"
+                : "Sensor readings are unavailable.";
         }
         catch (Exception error)
         {
             if (!closing)
-                status.Text = $"Napaka pri branju senzorjev ({error.GetType().Name}).";
+                status.Text = $"Couldn't read sensors ({error.GetType().Name}).";
         }
         finally
         {
@@ -477,17 +508,17 @@ internal sealed class Dashboard : Form
         var gpuTemperature = SelectMetric(gpuMetrics, "°C", "GPU Core");
         var memoryLoad = SelectMetric(memory, "%", "Memory");
 
-        var cpuName = cpuTemperature?.Device ?? cpuMetrics.FirstOrDefault()?.Device ?? "CPU ni zaznan";
-        var gpuName = gpuTemperature?.Device ?? gpuMetrics.FirstOrDefault()?.Device ?? "GPU ni zaznan";
+        var cpuName = cpuTemperature?.Device ?? cpuMetrics.FirstOrDefault()?.Device ?? "CPU not detected";
+        var gpuName = gpuTemperature?.Device ?? gpuMetrics.FirstOrDefault()?.Device ?? "GPU not detected";
         var cpuLoad = cpuMetrics.FirstOrDefault(metric => metric.Device == cpuName && metric.Name == "CPU Total" && metric.Unit == "%");
         var gpuLoad = gpuMetrics.FirstOrDefault(metric => metric.Device == gpuName && metric.Name == "GPU Core" && metric.Unit == "%");
-        cpu.SetReading(cpuTemperature?.Value, cpuName, $"Obremenitev  {Format(cpuLoad)}");
-        gpu.SetReading(gpuTemperature?.Value, gpuName, $"Obremenitev  {Format(gpuLoad)}");
+        cpu.SetReading(cpuTemperature?.Value, cpuName, $"Load  {Format(cpuLoad)}");
+        gpu.SetReading(gpuTemperature?.Value, gpuName, $"Load  {Format(gpuLoad)}");
 
         var used = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Used" && metric.Unit == "GB")?.Value;
         var free = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Available" && metric.Unit == "GB")?.Value;
         var capacity = used.HasValue && free.HasValue ? $"{used:0.#} / {used + free:0.#} GB" : "—";
-        ram.SetReading(memoryLoad?.Value, "Fizični pomnilnik", $"V uporabi  {capacity}");
+        ram.SetReading(memoryLoad?.Value, "Physical memory", $"In use  {capacity}");
         return cpuTemperature is not null;
     }
 
