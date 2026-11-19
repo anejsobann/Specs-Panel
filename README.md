@@ -14,6 +14,8 @@ Run `./Publish-Local.ps1` in PowerShell with the .NET 10 SDK, then open the `Spe
 
 CPU and GPU temperatures turn red at 80 °C. At 88 °C, Specs Panel shows a critical message and pulses all four edges red on a 3.2-second cycle, including in fullscreen. The alert clears 2 °C below each threshold to avoid switching repeatedly near the boundary.
 
+Click or tap the **Specs Panel** title and choose **Test Temperature Alert** to preview the warning for 15 seconds. The preview is marked **TEST ONLY** and uses a simulated reading without applying any hardware load.
+
 **Processes** lists running processes and their PIDs. Sort by share of total CPU capacity, physical memory (working set), or read and write I/O throughput, which can include network and other devices. CPU and I/O rates need two samples. A dash indicates an unavailable reading.
 
 **Sensors** shows detailed readings for your motherboard, drives, clock speeds, and fans when available.

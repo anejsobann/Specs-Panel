@@ -16,6 +16,7 @@ internal sealed class MetricCard : Control
     private string device = "Detecting device…";
     private string detail = "—";
     private float? value;
+    private float? previewTemperature;
     private TemperatureAlert alert;
 
     public MetricCard(string title, string unit, Color accent)
@@ -43,10 +44,29 @@ internal sealed class MetricCard : Control
         device = deviceName;
         detail = detailText;
         alert = temperatureAlert;
+        UpdateAccessibleDescription();
+        Invalidate();
+    }
+
+    public void SetTemperaturePreview(float? simulatedTemperature)
+    {
+        if (previewTemperature == simulatedTemperature)
+            return;
+        previewTemperature = simulatedTemperature;
+        UpdateAccessibleDescription();
+        Invalidate();
+    }
+
+    private void UpdateAccessibleDescription()
+    {
+        if (previewTemperature is float simulated)
+        {
+            AccessibleDescription = $"Test only, simulated critical temperature {simulated:0.#} {unit}";
+            return;
+        }
         AccessibleDescription = $"{device}, {readingLabel.ToLowerInvariant()} {(value is float measurement ? $"{measurement:0.#} {unit}" : "unavailable")}, {detail}";
         if (alert != TemperatureAlert.Normal)
             AccessibleDescription += alert == TemperatureAlert.Critical ? ", critical temperature" : ", high temperature";
-        Invalidate();
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -72,15 +92,16 @@ internal sealed class MetricCard : Control
             new(pad, 17 * scale, bodyWidth, 28 * scale));
         DrawText(canvas, device, Subtle, 13 * scale, FontStyle.Regular,
             new(pad, 50 * scale, bodyWidth, 26 * scale));
-        DrawText(canvas, readingLabel, Subtle, 10.5f * scale, FontStyle.Bold,
+        DrawText(canvas, previewTemperature.HasValue ? "SIMULATED TEMPERATURE" : readingLabel, Subtle, 10.5f * scale, FontStyle.Bold,
             new(pad, 88 * scale, bodyWidth, 18 * scale));
-        var readingColor = alert switch
+        var shownAlert = previewTemperature.HasValue ? TemperatureAlert.Critical : alert;
+        var readingColor = shownAlert switch
         {
             TemperatureAlert.Warning => Color.FromArgb(255, 116, 126),
             TemperatureAlert.Critical => Color.FromArgb(255, 73, 98),
             _ => TextColor
         };
-        DrawText(canvas, value is float measurement ? $"{measurement:0.#} {unit}" : "—", readingColor,
+        DrawText(canvas, (previewTemperature ?? value) is float measurement ? $"{measurement:0.#} {unit}" : "—", readingColor,
             46 * scale, FontStyle.Bold, new(pad, 106 * scale, bodyWidth, 65 * scale));
         DrawText(canvas, detail, accent, 12 * scale, FontStyle.Regular,
             new(pad, 173 * scale, bodyWidth, 25 * scale));

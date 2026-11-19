@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace SpecsPanel;
 
 internal sealed class Dashboard : Form
@@ -12,6 +14,8 @@ internal sealed class Dashboard : Form
     private readonly ThermalFrame thermalFrame = new();
     private readonly Button displays = new() { Text = "Display  ▾", AutoSize = true, MinimumSize = new Size(165, 0), TextAlign = ContentAlignment.MiddleLeft };
     private readonly ContextMenuStrip displayMenu = new() { ShowImageMargin = false, ShowCheckMargin = true };
+    private readonly ContextMenuStrip titleMenu = new() { ShowImageMargin = false };
+    private readonly ToolStripMenuItem temperatureTest = new("Test Temperature Alert");
     private Screen? selectedDisplay;
     private readonly Button fullscreen = new() { Text = "Fullscreen", AutoSize = true, FlatStyle = FlatStyle.Flat };
     private readonly DataGridView details = new();
@@ -33,6 +37,8 @@ internal sealed class Dashboard : Form
     private readonly System.Windows.Forms.Timer visualTimer = new() { Interval = 250 };
     private TemperatureAlert cpuAlert;
     private TemperatureAlert gpuAlert;
+    private long? temperatureTestStarted;
+    private string measurementStatus = "Detecting sensors…";
     private Rectangle windowBounds;
     private bool full;
     private bool reading;
@@ -106,13 +112,14 @@ internal sealed class Dashboard : Form
         visualTimer.Tick += (_, _) =>
         {
             UpdateClock();
+            UpdateTemperatureTest();
             thermalFrame.Animate();
         };
         Shown += async (_, _) =>
         {
             RefreshDisplays();
             RestoreView(args);
-            status.Text = "Detecting sensors…";
+            RefreshThermalPresentation();
             UpdateClock();
             visualTimer.Start();
             timer.Start();
@@ -129,22 +136,33 @@ internal sealed class Dashboard : Form
         {
             visualTimer.Dispose();
             displayMenu.Dispose();
+            titleMenu.Dispose();
         };
     }
 
     private Panel CreateHeader()
     {
         var header = new Panel { Anchor = AnchorStyles.Left | AnchorStyles.Right, Height = 44, Margin = new Padding(0, 0, 0, 8) };
-        var brand = new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold) };
+        var brand = new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold), Cursor = Cursors.Hand };
+        ConfigureMenu(titleMenu);
+        temperatureTest.ForeColor = Ink;
+        temperatureTest.Padding = new Padding(6);
+        temperatureTest.Click += (_, _) => StartTemperatureTest();
+        titleMenu.Items.Add(temperatureTest);
+        titleMenu.Opening += (_, _) => temperatureTest.Enabled = !temperatureTestStarted.HasValue && !HasCriticalTemperature;
+        brand.ContextMenuStrip = titleMenu;
+        brand.MouseClick += (_, args) =>
+        {
+            if (args.Button == MouseButtons.Left)
+                titleMenu.Show(brand, new Point(0, brand.Height));
+        };
+        brand.AccessibleDescription = "Opens the temperature alert test menu.";
         clock.Font = new Font(Font.FontFamily, 16, FontStyle.Bold);
         UpdateClock();
 
         StyleButton(displays);
         displays.AccessibleName = "Select display";
-        displayMenu.Renderer = new DisplayMenuRenderer();
-        displayMenu.ForeColor = Ink;
-        displayMenu.Font = Font;
-        displayMenu.Padding = new Padding(3);
+        ConfigureMenu(displayMenu);
         StyleButton(fullscreen);
         var controls = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false };
         controls.Controls.AddRange([displays, fullscreen]);
@@ -165,6 +183,14 @@ internal sealed class Dashboard : Form
             clock.Location = new Point(Math.Max(0, clockX), singleRow ? (rowHeight - clock.Height) / 2 : rowHeight + 4);
         };
         return header;
+    }
+
+    private void ConfigureMenu(ContextMenuStrip menu)
+    {
+        menu.Renderer = new DisplayMenuRenderer();
+        menu.ForeColor = Ink;
+        menu.Font = Font;
+        menu.Padding = new Padding(3);
     }
 
     private void UpdateClock()
@@ -374,11 +400,11 @@ internal sealed class Dashboard : Form
         }
         catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
         {
-            status.Text = "Administrator startup was cancelled.";
+            SetMeasurementStatus("Administrator startup was cancelled.");
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            status.Text = "Couldn't open CPU temperature help.";
+            SetMeasurementStatus("Couldn't open CPU temperature help.");
         }
     }
 
@@ -537,20 +563,16 @@ internal sealed class Dashboard : Form
             var showCpuHelp = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
             cpuHelp.Visible = showCpuHelp;
             cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Run as administrator to read CPU temperature" : "Download PawnIO for CPU temperature";
-            var critical = cpuAlert == TemperatureAlert.Critical || gpuAlert == TemperatureAlert.Critical;
-            status.ForeColor = critical ? Color.FromArgb(255, 116, 126) : Muted;
-            status.Text = critical
-                ? CriticalTemperatureMessage()
-                : !cpuAvailable && !showCpuHelp
+            SetMeasurementStatus(!cpuAvailable && !showCpuHelp
                 ? "CPU temperature sensor returned no reading."
                 : metrics.Any(metric => metric.Value.HasValue)
                 ? $"Last updated at {DateTime.Now:HH:mm:ss}"
-                : "Sensor readings are unavailable.";
+                : "Sensor readings are unavailable.");
         }
         catch (Exception error)
         {
             if (!closing)
-                status.Text = $"Couldn't read sensors ({error.GetType().Name}).";
+                SetMeasurementStatus($"Couldn't read sensors ({error.GetType().Name}).");
         }
         finally
         {
@@ -577,17 +599,56 @@ internal sealed class Dashboard : Form
         gpuAlert = ThermalAlerts.Update(gpuTemperature?.Value, gpuAlert);
         cpu.SetReading(cpuTemperature?.Value, cpuName, $"Load  {Format(cpuLoad)}", cpuAlert);
         gpu.SetReading(gpuTemperature?.Value, gpuName, $"Load  {Format(gpuLoad)}", gpuAlert);
-        var critical = cpuAlert == TemperatureAlert.Critical || gpuAlert == TemperatureAlert.Critical;
-        thermalFrame.SetCritical(critical);
-        var interval = critical ? 50 : 250;
-        if (visualTimer.Interval != interval)
-            visualTimer.Interval = interval;
 
         var used = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Used" && metric.Unit == "GB")?.Value;
         var free = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Available" && metric.Unit == "GB")?.Value;
         var capacity = used.HasValue && free.HasValue ? $"{used:0.#} / {used + free:0.#} GB" : "—";
         ram.SetReading(memoryLoad?.Value, "Physical memory", $"In use  {capacity}");
         return cpuTemperature is not null;
+    }
+
+    private bool HasCriticalTemperature => cpuAlert == TemperatureAlert.Critical || gpuAlert == TemperatureAlert.Critical;
+
+    private void StartTemperatureTest()
+    {
+        if (temperatureTestStarted.HasValue || HasCriticalTemperature)
+            return;
+        temperatureTestStarted = Stopwatch.GetTimestamp();
+        RefreshThermalPresentation();
+    }
+
+    private void UpdateTemperatureTest()
+    {
+        if (temperatureTestStarted is not long start || Stopwatch.GetElapsedTime(start) < TimeSpan.FromSeconds(15))
+            return;
+        temperatureTestStarted = null;
+        RefreshThermalPresentation();
+    }
+
+    private void SetMeasurementStatus(string message)
+    {
+        measurementStatus = message;
+        RefreshThermalPresentation();
+    }
+
+    private void RefreshThermalPresentation()
+    {
+        var critical = HasCriticalTemperature;
+        if (critical)
+            temperatureTestStarted = null;
+        var testing = temperatureTestStarted.HasValue;
+        cpu.SetTemperaturePreview(testing ? 89f : null);
+
+        var pulsing = critical || testing;
+        thermalFrame.SetCritical(pulsing);
+        var interval = pulsing ? 50 : 250;
+        if (visualTimer.Interval != interval)
+            visualTimer.Interval = interval;
+
+        status.ForeColor = pulsing ? Color.FromArgb(255, 116, 126) : Muted;
+        status.Text = critical ? CriticalTemperatureMessage()
+            : testing ? "TEST ONLY • SIMULATED CPU TEMPERATURE (89 °C)"
+            : measurementStatus;
     }
 
     private string CriticalTemperatureMessage() => (cpuAlert, gpuAlert) switch
