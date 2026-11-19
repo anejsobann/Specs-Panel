@@ -2,25 +2,30 @@ namespace SpecsPanel;
 
 internal sealed class Dashboard : Form
 {
-    private static readonly Color Background = Color.FromArgb(15, 20, 29);
-    private static readonly Color Surface = Color.FromArgb(25, 34, 47);
-    private static readonly Color Ink = Color.FromArgb(235, 242, 250);
-    private static readonly Color Muted = Color.FromArgb(166, 183, 202);
-    private static readonly Color Accent = Color.FromArgb(104, 231, 199);
+    private static readonly Color Background = Color.FromArgb(9, 15, 25);
+    private static readonly Color Surface = Color.FromArgb(20, 30, 45);
+    private static readonly Color Ink = Color.FromArgb(237, 245, 255);
+    private static readonly Color Muted = Color.FromArgb(163, 180, 202);
+    private static readonly Color Accent = Color.FromArgb(99, 241, 209);
     private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly ComboBox displays = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 190 };
+    private readonly Button displays = new() { Text = "Zaslon  ▾", AutoSize = true, MinimumSize = new Size(165, 0), TextAlign = ContentAlignment.MiddleLeft };
+    private readonly ContextMenuStrip displayMenu = new() { ShowImageMargin = false, ShowCheckMargin = true };
+    private Screen? selectedDisplay;
     private readonly Button fullscreen = new() { Text = "Celozaslonsko", AutoSize = true, FlatStyle = FlatStyle.Flat };
     private readonly DataGridView details = new();
     private readonly DataGridView processes = new();
-    private readonly TabControl tabs = new() { Dock = DockStyle.Fill };
+    private readonly Panel[] pages = [new(), new(), new()];
+    private readonly Button[] navigation = new Button[3];
+    private int selectedPage;
     private readonly ComboBox processSort = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
     private readonly Label processStatus = new() { Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
     private readonly ProcessReader processReader = new();
     private List<ProcessUsage> processUsage = [];
     private bool samplingProcesses;
     private readonly Button cpuHelp = new() { AutoSize = true, FlatStyle = FlatStyle.Flat, Visible = false };
-    private readonly Label[] values = new Label[3];
-    private readonly Label[] devices = new Label[3];
+    private readonly MetricCard cpu = new("CPU", "°C", Accent);
+    private readonly MetricCard gpu = new("GPU", "°C", Color.FromArgb(109, 184, 255));
+    private readonly MetricCard ram = new("RAM", "%", Color.FromArgb(187, 155, 255));
     private readonly HardwareReader reader = new();
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 1500 };
     private Rectangle windowBounds;
@@ -39,58 +44,70 @@ internal sealed class Dashboard : Form
         ForeColor = Ink;
         Font = new Font("Segoe UI", 11);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 2 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18, 12, 18, 8), ColumnCount = 1, RowCount = 4 };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         Controls.Add(layout);
 
-        var header = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        displays.Width = 220;
-        header.Controls.Add(new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font, FontStyle.Bold), Margin = new Padding(0, 6, 16, 6) });
-        header.Controls.Add(displays);
-        fullscreen.BackColor = Surface;
-        header.Controls.Add(fullscreen);
+        var header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, Margin = new Padding(0, 0, 0, 8) };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        header.Controls.Add(new Label { Text = "Specs Panel", AutoSize = true, Font = new Font("Segoe UI", 19, FontStyle.Bold), Anchor = AnchorStyles.Left, Margin = Padding.Empty }, 0, 0);
+        StyleButton(displays);
+        displayMenu.Renderer = new ToolStripProfessionalRenderer(new DisplayMenuColors());
+        displayMenu.ForeColor = Ink;
+        displays.Anchor = AnchorStyles.Left;
+        header.Controls.Add(displays, 1, 0);
+        StyleButton(fullscreen);
+        header.Controls.Add(fullscreen, 2, 0);
         layout.Controls.Add(header, 0, 0);
 
-        var specsPage = new TabPage("System Specs") { BackColor = Background, Padding = new Padding(4) };
-        var processPage = new TabPage("Processes") { BackColor = Background, Padding = new Padding(4) };
-        tabs.TabPages.AddRange([specsPage, processPage]);
-        layout.Controls.Add(tabs, 0, 1);
-        var specs = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
-        specs.RowStyles.Add(new RowStyle(SizeType.Absolute, 138));
+        var nav = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
+        var pageHost = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
+        string[] pageNames = ["System Specs", "Processes", "Sensors"];
+        for (var index = 0; index < pages.Length; index++)
+        {
+            var pageIndex = index;
+            var button = new Button { Text = pageNames[index], AutoSize = true, Margin = new Padding(0, 0, 8, 0) };
+            StyleButton(button);
+            button.Click += (_, _) => SelectPage(pageIndex);
+            navigation[index] = button;
+            nav.Controls.Add(button);
+            pages[index].Dock = DockStyle.Fill;
+            pageHost.Controls.Add(pages[index]);
+        }
+        layout.Controls.Add(nav, 0, 1);
+        layout.Controls.Add(pageHost, 0, 2);
+        SelectPage(0);
+
+        var specs = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
         specs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         specs.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        specs.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
-        specsPage.Controls.Add(specs);
+        pages[0].Controls.Add(specs);
 
-        var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1 };
+        var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty };
         cards.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        string[] titles = ["CPU", "GPU", "RAM"];
-        for (var index = 0; index < titles.Length; index++)
-        {
-            cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f / titles.Length));
-            var card = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Surface, Padding = new Padding(10), RowCount = 3, ColumnCount = 1 };
-            card.RowStyles.Add(new RowStyle(SizeType.Absolute, 22));
-            card.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            card.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-            card.Controls.Add(new Label { Text = titles[index], Dock = DockStyle.Fill, ForeColor = Muted }, 0, 0);
-            values[index] = new Label { Text = "—", Dock = DockStyle.Fill, ForeColor = Accent, Font = new Font("Segoe UI", 22, FontStyle.Bold), TextAlign = ContentAlignment.MiddleLeft };
-            devices[index] = new Label { Dock = DockStyle.Fill, AutoEllipsis = true, ForeColor = Muted };
-            card.Controls.Add(values[index], 0, 1);
-            card.Controls.Add(devices[index], 0, 2);
-            cards.Controls.Add(card, index, 0);
-        }
+        for (var index = 0; index < 3; index++)
+            cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100 / 3f));
+        ram.Margin = Padding.Empty;
+        cards.Controls.Add(cpu, 0, 0);
+        cards.Controls.Add(gpu, 1, 0);
+        cards.Controls.Add(ram, 2, 0);
         specs.Controls.Add(cards, 0, 0);
 
         ConfigureGrid(details, ("Skupina", 17), ("Naprava", 33), ("Senzor", 32), ("Meritev", 18));
-        specs.Controls.Add(details, 0, 1);
-        cpuHelp.BackColor = Surface;
+        pages[2].Controls.Add(details);
+        StyleButton(cpuHelp);
         cpuHelp.Click += (_, _) => OpenCpuHelp();
-        specs.Controls.Add(cpuHelp, 0, 2);
-        specs.Controls.Add(status, 0, 3);
-        ConfigureProcesses(processPage);
+        specs.Controls.Add(cpuHelp, 0, 1);
+        status.AutoEllipsis = true;
+        layout.Controls.Add(status, 0, 3);
+        ConfigureProcesses(pages[1]);
 
-        displays.DropDown += (_, _) => RefreshDisplays();
+        displays.Click += (_, _) => OpenDisplayMenu();
         fullscreen.Click += (_, _) => ToggleFullscreen();
         timer.Tick += async (_, _) => await RefreshDashboard();
         Shown += async (_, _) =>
@@ -108,6 +125,55 @@ internal sealed class Dashboard : Form
             if (!reading)
                 reader.Dispose();
         };
+        Disposed += (_, _) => displayMenu.Dispose();
+    }
+
+    private static void StyleButton(Button button)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderColor = Color.FromArgb(55, 73, 96);
+        button.FlatAppearance.MouseOverBackColor = Color.FromArgb(32, 48, 65);
+        button.BackColor = Surface;
+        button.ForeColor = Ink;
+        button.Padding = new Padding(8, 3, 8, 3);
+        button.UseVisualStyleBackColor = false;
+        button.Cursor = Cursors.Hand;
+    }
+
+    private static void StylePicker(ComboBox picker)
+    {
+        picker.FlatStyle = FlatStyle.Flat;
+        picker.BackColor = Surface;
+        picker.ForeColor = Ink;
+        picker.DrawMode = DrawMode.OwnerDrawFixed;
+        picker.ItemHeight = 25;
+        picker.DrawItem += (_, args) =>
+        {
+            var highlighted = (args.State & DrawItemState.Selected) != 0 &&
+                (args.State & DrawItemState.ComboBoxEdit) == 0;
+            using var fill = new SolidBrush(highlighted ? Color.FromArgb(25, 61, 69) : Surface);
+            args.Graphics.FillRectangle(fill, args.Bounds);
+            if (args.Index < 0)
+                return;
+            var textBounds = Rectangle.Inflate(args.Bounds, -6, 0);
+            TextRenderer.DrawText(args.Graphics, picker.GetItemText(picker.Items[args.Index]), picker.Font,
+                textBounds, Ink, TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter |
+                TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
+        };
+    }
+
+    private void SelectPage(int index)
+    {
+        selectedPage = index;
+        for (var page = 0; page < pages.Length; page++)
+        {
+            var active = page == index;
+            pages[page].Visible = active;
+            navigation[page].ForeColor = active ? Accent : Muted;
+            navigation[page].BackColor = active ? Color.FromArgb(17, 48, 51) : Surface;
+            navigation[page].FlatAppearance.BorderColor = active ? Accent : Color.FromArgb(55, 73, 96);
+            navigation[page].AccessibleDescription = active ? "Izbrani zavihek" : "";
+        }
     }
 
     private static void ConfigureGrid(DataGridView grid, params (string Name, int Width)[] columns)
@@ -121,17 +187,22 @@ internal sealed class Dashboard : Form
         grid.BackgroundColor = Surface;
         grid.BorderStyle = BorderStyle.None;
         grid.GridColor = Background;
+        grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
+        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
         grid.EnableHeadersVisualStyles = false;
         grid.ColumnHeadersDefaultCellStyle.BackColor = Surface;
-        grid.ColumnHeadersDefaultCellStyle.ForeColor = Ink;
+        grid.ColumnHeadersDefaultCellStyle.ForeColor = Accent;
         grid.DefaultCellStyle.BackColor = Background;
         grid.DefaultCellStyle.ForeColor = Ink;
-        grid.RowTemplate.Height = 28;
+        grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(25, 61, 69);
+        grid.DefaultCellStyle.SelectionForeColor = Ink;
+        grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(13, 22, 35);
+        grid.RowTemplate.Height = 30;
         foreach (var (name, width) in columns)
             grid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = name, FillWeight = width, SortMode = DataGridViewColumnSortMode.NotSortable });
     }
 
-    private void ConfigureProcesses(TabPage page)
+    private void ConfigureProcesses(Panel page)
     {
         var panel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
         panel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
@@ -142,6 +213,7 @@ internal sealed class Dashboard : Form
         var filter = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         filter.Controls.Add(new Label { Text = "Razvrsti po", AutoSize = true, Margin = new Padding(4, 6, 8, 4) });
         filter.Controls.Add(processSort);
+        StylePicker(processSort);
         processSort.Items.AddRange(["CPU", "RAM", "I/O"]);
         processSort.SelectedIndex = 0;
         processSort.SelectedIndexChanged += (_, _) => RenderProcesses();
@@ -220,21 +292,22 @@ internal sealed class Dashboard : Form
     private static string Number(double? value) => value?.ToString("0.0") ?? "—";
 
     private string[] ViewArguments() =>
-        [tabs.SelectedIndex.ToString(), Screen.FromControl(this).DeviceName, full ? "fullscreen" : "window"];
+        [selectedPage.ToString(), Screen.FromControl(this).DeviceName, full ? "fullscreen" : "window"];
 
     private void RestoreView(string[] args)
     {
         if (args.Length != 3)
             return;
-        tabs.SelectedIndex = args[0] == "1" ? 1 : 0;
-        var display = displays.Items.OfType<DisplayChoice>().FirstOrDefault(choice => choice.Screen.DeviceName == args[1]);
+        if (int.TryParse(args[0], out var page) && page >= 0 && page < pages.Length)
+            SelectPage(page);
+        var display = Screen.AllScreens.FirstOrDefault(screen => screen.DeviceName == args[1]);
         if (display is null)
             return;
-        displays.SelectedItem = display;
+        SelectDisplay(display);
         if (args[2] == "fullscreen")
             ToggleFullscreen();
-        else if (Screen.FromControl(this).DeviceName != display.Screen.DeviceName)
-            Location = display.Screen.WorkingArea.Location;
+        else if (Screen.FromControl(this).DeviceName != display.DeviceName)
+            Location = display.WorkingArea.Location;
     }
 
     private void OpenCpuHelp()
@@ -261,16 +334,54 @@ internal sealed class Dashboard : Form
         }
     }
 
-    private void RefreshDisplays()
+    private Screen[] RefreshDisplays()
     {
-        var previous = (displays.SelectedItem as DisplayChoice)?.Screen.DeviceName ?? Screen.FromControl(this).DeviceName;
+        var previous = selectedDisplay?.DeviceName ?? Screen.FromControl(this).DeviceName;
         var screens = Screen.AllScreens;
-        displays.Items.Clear();
+        var selection = screens.FirstOrDefault(screen => screen.DeviceName == previous) ?? screens.FirstOrDefault();
+        if (selection is not null)
+            SelectDisplay(selection);
+        return screens;
+    }
+
+    private void SelectDisplay(Screen display)
+    {
+        selectedDisplay = display;
+        displays.Text = $"{new DisplayChoice(display)}  ▾";
+    }
+
+    private void OpenDisplayMenu()
+    {
+        var screens = RefreshDisplays();
+        while (displayMenu.Items.Count > 0)
+        {
+            var oldItem = displayMenu.Items[0];
+            displayMenu.Items.RemoveAt(0);
+            oldItem.Dispose();
+        }
         foreach (var screen in screens)
-            displays.Items.Add(new DisplayChoice(screen));
-        var index = Array.FindIndex(screens, screen => screen.DeviceName == previous);
-        if (screens.Length > 0)
-            displays.SelectedIndex = Math.Max(0, index);
+        {
+            var item = new ToolStripMenuItem(new DisplayChoice(screen).ToString())
+            {
+                Checked = screen.DeviceName == selectedDisplay?.DeviceName,
+                ForeColor = Ink
+            };
+            item.Click += (_, _) => SelectDisplay(screen);
+            displayMenu.Items.Add(item);
+        }
+        if (displayMenu.Items.Count > 0)
+            displayMenu.Show(displays, new Point(0, displays.Height));
+    }
+
+    private sealed class DisplayMenuColors : ProfessionalColorTable
+    {
+        public override Color ToolStripDropDownBackground => Surface;
+        public override Color MenuBorder => Color.FromArgb(55, 73, 96);
+        public override Color MenuItemBorder => Color.FromArgb(43, 90, 99);
+        public override Color MenuItemSelected => Color.FromArgb(25, 61, 69);
+        public override Color ImageMarginGradientBegin => Surface;
+        public override Color ImageMarginGradientMiddle => Surface;
+        public override Color ImageMarginGradientEnd => Surface;
     }
 
     private sealed record DisplayChoice(Screen Screen)
@@ -294,7 +405,7 @@ internal sealed class Dashboard : Form
         }
         else
         {
-            var selectedName = (displays.SelectedItem as DisplayChoice)?.Screen.DeviceName;
+            var selectedName = selectedDisplay?.DeviceName;
             var screen = Screen.AllScreens.FirstOrDefault(candidate => candidate.DeviceName == selectedName)
                 ?? Screen.FromControl(this);
             windowBounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
@@ -328,18 +439,17 @@ internal sealed class Dashboard : Form
             var metrics = await Task.Run(reader.Read);
             if (closing)
                 return;
-            var cpuAvailable = UpdateCard(0, metrics, "CPU", "°C", "CPU Package", "Core (Tctl/Tdie)", "Core (Tdie)", "Core (Tctl)", "Core Average", "Core Max");
-            UpdateCard(1, metrics, "GPU", "°C", "GPU Core");
-            UpdateCard(2, metrics, "RAM", "%", "Memory");
+            var cpuAvailable = UpdateCards(metrics);
             SetRowCount(details, metrics.Count);
             for (var index = 0; index < metrics.Count; index++)
             {
                 var metric = metrics[index];
                 details.Rows[index].SetValues(metric.Group, metric.Device, metric.Name, Format(metric));
             }
-            cpuHelp.Visible = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
+            var showCpuHelp = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
+            cpuHelp.Visible = showCpuHelp;
             cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Zaženi kot skrbnik za temperaturo CPU" : "Odpri uradni gonilnik PawnIO za temperaturo CPU";
-            status.Text = !cpuAvailable && !cpuHelp.Visible
+            status.Text = !cpuAvailable && !showCpuHelp
                 ? "Temperaturni senzor CPU ni vrnil podatka."
                 : metrics.Any(metric => metric.Value.HasValue)
                 ? $"Zadnja meritev ob {DateTime.Now:HH:mm:ss}"
@@ -358,18 +468,36 @@ internal sealed class Dashboard : Form
         }
     }
 
-    private bool UpdateCard(int index, List<Metric> metrics, string group, string unit, params string[] preferredNames)
+    private bool UpdateCards(List<Metric> metrics)
     {
-        var options = metrics.Where(metric => metric.Group == group).ToArray();
-        var available = options.Where(metric => metric.Unit == unit && metric.Value.HasValue &&
-            (group != "RAM" || metric.Device != "Virtual Memory")).ToArray();
-        var selected = preferredNames.Select(name => available.FirstOrDefault(metric => metric.Name == name))
-            .FirstOrDefault(metric => metric is not null)
-            ?? available.MaxBy(metric => metric.Value);
-        values[index].Text = selected is null ? "—" : Format(selected);
-        devices[index].Text = selected?.Device ?? options.FirstOrDefault()?.Device ?? "Ni podatka";
-        return selected is not null;
+        var cpuMetrics = metrics.Where(metric => metric.Group == "CPU").ToArray();
+        var gpuMetrics = metrics.Where(metric => metric.Group == "GPU").ToArray();
+        var memory = metrics.Where(metric => metric.Group == "RAM" && metric.Device != "Virtual Memory").ToArray();
+        var cpuTemperature = SelectMetric(cpuMetrics, "°C", "CPU Package", "Core (Tctl/Tdie)", "Core (Tdie)", "Core (Tctl)", "Core Average", "Core Max");
+        var gpuTemperature = SelectMetric(gpuMetrics, "°C", "GPU Core");
+        var memoryLoad = SelectMetric(memory, "%", "Memory");
+
+        var cpuName = cpuTemperature?.Device ?? cpuMetrics.FirstOrDefault()?.Device ?? "CPU ni zaznan";
+        var gpuName = gpuTemperature?.Device ?? gpuMetrics.FirstOrDefault()?.Device ?? "GPU ni zaznan";
+        var cpuLoad = cpuMetrics.FirstOrDefault(metric => metric.Device == cpuName && metric.Name == "CPU Total" && metric.Unit == "%");
+        var gpuLoad = gpuMetrics.FirstOrDefault(metric => metric.Device == gpuName && metric.Name == "GPU Core" && metric.Unit == "%");
+        cpu.SetReading(cpuTemperature?.Value, cpuName, $"Obremenitev  {Format(cpuLoad)}");
+        gpu.SetReading(gpuTemperature?.Value, gpuName, $"Obremenitev  {Format(gpuLoad)}");
+
+        var used = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Used" && metric.Unit == "GB")?.Value;
+        var free = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Available" && metric.Unit == "GB")?.Value;
+        var capacity = used.HasValue && free.HasValue ? $"{used:0.#} / {used + free:0.#} GB" : "—";
+        ram.SetReading(memoryLoad?.Value, "Fizični pomnilnik", $"V uporabi  {capacity}");
+        return cpuTemperature is not null;
     }
 
-    private static string Format(Metric metric) => metric.Value is float value ? $"{value:0.#} {metric.Unit}" : "—";
+    private static Metric? SelectMetric(IEnumerable<Metric> options, string unit, params string[] preferredNames)
+    {
+        var available = options.Where(metric => metric.Unit == unit && metric.Value.HasValue).ToArray();
+        return preferredNames.Select(name => available.FirstOrDefault(metric => metric.Name == name))
+            .FirstOrDefault(metric => metric is not null)
+            ?? available.MaxBy(metric => metric.Value);
+    }
+
+    private static string Format(Metric? metric) => metric?.Value is float value ? $"{value:0.#} {metric.Unit}" : "—";
 }
