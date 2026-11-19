@@ -384,6 +384,22 @@ internal sealed class Dashboard : Form
 
     private sealed class DisplayMenuRenderer() : ToolStripProfessionalRenderer(new DisplayMenuColors())
     {
+        protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs args)
+        {
+            if (!args.Item.Selected && !args.Item.Pressed)
+                return;
+
+            var row = new Rectangle(1, 0, args.Item.Width - 2, args.Item.Height - 1);
+            if (row.Width <= 0 || row.Height <= 0)
+                return;
+
+            var background = args.Item.Pressed ? Color.FromArgb(30, 70, 76) : Color.FromArgb(24, 54, 64);
+            using var fill = new SolidBrush(background);
+            using var border = new Pen(Color.FromArgb(56, 101, 111));
+            args.Graphics.FillRectangle(fill, row);
+            args.Graphics.DrawRectangle(border, row);
+        }
+
         protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs args)
         {
             var bounds = args.ImageRectangle;
@@ -408,8 +424,6 @@ internal sealed class Dashboard : Form
     {
         public override Color ToolStripDropDownBackground => Surface;
         public override Color MenuBorder => Color.FromArgb(55, 73, 96);
-        public override Color MenuItemBorder => Color.FromArgb(43, 90, 99);
-        public override Color MenuItemSelected => Color.FromArgb(25, 61, 69);
         public override Color ImageMarginGradientBegin => Surface;
         public override Color ImageMarginGradientMiddle => Surface;
         public override Color ImageMarginGradientEnd => Surface;
