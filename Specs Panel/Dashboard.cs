@@ -279,7 +279,7 @@ internal sealed class Dashboard : Form
         {
             @"\\.\DISPLAY1" => "MAIN MONITOR",
             @"\\.\DISPLAY2" => "ALT MONITOR",
-            @"\\.\DISPLAY3" => "TABLET",
+            @"\\.\DISPLAY10" => "TABLET",
             _ => $"{Screen.DeviceName.Replace(@"\\.\DISPLAY", "Zaslon ")} • {Screen.Bounds.Width}×{Screen.Bounds.Height}"
         };
     }
