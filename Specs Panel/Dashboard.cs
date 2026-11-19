@@ -8,6 +8,8 @@ internal sealed class Dashboard : Form
     private static readonly Color Muted = Color.FromArgb(163, 180, 202);
     private static readonly Color Accent = Color.FromArgb(99, 241, 209);
     private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
+    private readonly Label clock = new() { AutoSize = true, ForeColor = Accent, AccessibleName = "Local time" };
+    private readonly ThermalFrame thermalFrame = new();
     private readonly Button displays = new() { Text = "Display  ▾", AutoSize = true, MinimumSize = new Size(165, 0), TextAlign = ContentAlignment.MiddleLeft };
     private readonly ContextMenuStrip displayMenu = new() { ShowImageMargin = false, ShowCheckMargin = true };
     private Screen? selectedDisplay;
@@ -28,6 +30,9 @@ internal sealed class Dashboard : Form
     private readonly MetricCard ram = new("RAM", "%", Color.FromArgb(187, 155, 255));
     private readonly HardwareReader reader = new();
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 1500 };
+    private readonly System.Windows.Forms.Timer visualTimer = new() { Interval = 250 };
+    private TemperatureAlert cpuAlert;
+    private TemperatureAlert gpuAlert;
     private Rectangle windowBounds;
     private bool full;
     private bool reading;
@@ -44,29 +49,14 @@ internal sealed class Dashboard : Form
         ForeColor = Ink;
         Font = new Font("Bahnschrift", 11);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(18, 12, 18, 8), ColumnCount = 1, RowCount = 4 };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        Controls.Add(layout);
-
-        var header = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, Margin = new Padding(0, 0, 0, 8) };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        header.Controls.Add(new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold), Anchor = AnchorStyles.Left, Margin = Padding.Empty }, 0, 0);
-        StyleButton(displays);
-        displays.AccessibleName = "Select display";
-        displayMenu.Renderer = new DisplayMenuRenderer();
-        displayMenu.ForeColor = Ink;
-        displayMenu.Font = Font;
-        displayMenu.Padding = new Padding(3);
-        displays.Anchor = AnchorStyles.Left;
-        header.Controls.Add(displays, 1, 0);
-        StyleButton(fullscreen);
-        header.Controls.Add(fullscreen, 2, 0);
-        layout.Controls.Add(header, 0, 0);
+        thermalFrame.Controls.Add(layout);
+        Controls.Add(thermalFrame);
+        layout.Controls.Add(CreateHeader(), 0, 0);
 
         var nav = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false, Margin = new Padding(0, 0, 0, 10) };
         var pageHost = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
@@ -113,11 +103,18 @@ internal sealed class Dashboard : Form
         displays.Click += (_, _) => OpenDisplayMenu();
         fullscreen.Click += (_, _) => ToggleFullscreen();
         timer.Tick += async (_, _) => await RefreshDashboard();
+        visualTimer.Tick += (_, _) =>
+        {
+            UpdateClock();
+            thermalFrame.Animate();
+        };
         Shown += async (_, _) =>
         {
             RefreshDisplays();
             RestoreView(args);
             status.Text = "Detecting sensors…";
+            UpdateClock();
+            visualTimer.Start();
             timer.Start();
             await RefreshDashboard();
         };
@@ -128,7 +125,53 @@ internal sealed class Dashboard : Form
             if (!reading)
                 reader.Dispose();
         };
-        Disposed += (_, _) => displayMenu.Dispose();
+        Disposed += (_, _) =>
+        {
+            visualTimer.Dispose();
+            displayMenu.Dispose();
+        };
+    }
+
+    private Panel CreateHeader()
+    {
+        var header = new Panel { Anchor = AnchorStyles.Left | AnchorStyles.Right, Height = 44, Margin = new Padding(0, 0, 0, 8) };
+        var brand = new Label { Text = "Specs Panel", AutoSize = true, Font = new Font(Font.FontFamily, 19, FontStyle.Bold) };
+        clock.Font = new Font(Font.FontFamily, 16, FontStyle.Bold);
+        UpdateClock();
+
+        StyleButton(displays);
+        displays.AccessibleName = "Select display";
+        displayMenu.Renderer = new DisplayMenuRenderer();
+        displayMenu.ForeColor = Ink;
+        displayMenu.Font = Font;
+        displayMenu.Padding = new Padding(3);
+        StyleButton(fullscreen);
+        var controls = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false };
+        controls.Controls.AddRange([displays, fullscreen]);
+        header.Controls.AddRange([brand, clock, controls]);
+
+        header.Layout += (_, _) =>
+        {
+            var rowHeight = Math.Max(Math.Max(brand.Height, controls.Height), clock.Height);
+            var clockX = (header.Width - clock.Width) / 2;
+            var controlsX = Math.Max(0, header.Width - controls.Width);
+            var singleRow = clockX >= brand.Right + 8 && clockX + clock.Width + 8 <= controlsX;
+            var height = singleRow ? rowHeight : rowHeight + clock.Height + 4;
+            if (header.Height != height)
+                header.Height = height;
+
+            brand.Location = new Point(0, (rowHeight - brand.Height) / 2);
+            controls.Location = new Point(controlsX, (rowHeight - controls.Height) / 2);
+            clock.Location = new Point(Math.Max(0, clockX), singleRow ? (rowHeight - clock.Height) / 2 : rowHeight + 4);
+        };
+        return header;
+    }
+
+    private void UpdateClock()
+    {
+        var now = DateTime.Now.ToString("HH:mm:ss");
+        if (clock.Text != now)
+            clock.Text = now;
     }
 
     private static void StyleButton(Button button)
@@ -494,7 +537,11 @@ internal sealed class Dashboard : Form
             var showCpuHelp = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
             cpuHelp.Visible = showCpuHelp;
             cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Run as administrator to read CPU temperature" : "Download PawnIO for CPU temperature";
-            status.Text = !cpuAvailable && !showCpuHelp
+            var critical = cpuAlert == TemperatureAlert.Critical || gpuAlert == TemperatureAlert.Critical;
+            status.ForeColor = critical ? Color.FromArgb(255, 116, 126) : Muted;
+            status.Text = critical
+                ? CriticalTemperatureMessage()
+                : !cpuAvailable && !showCpuHelp
                 ? "CPU temperature sensor returned no reading."
                 : metrics.Any(metric => metric.Value.HasValue)
                 ? $"Last updated at {DateTime.Now:HH:mm:ss}"
@@ -526,8 +573,15 @@ internal sealed class Dashboard : Form
         var gpuName = gpuTemperature?.Device ?? gpuMetrics.FirstOrDefault()?.Device ?? "GPU not detected";
         var cpuLoad = cpuMetrics.FirstOrDefault(metric => metric.Device == cpuName && metric.Name == "CPU Total" && metric.Unit == "%");
         var gpuLoad = gpuMetrics.FirstOrDefault(metric => metric.Device == gpuName && metric.Name == "GPU Core" && metric.Unit == "%");
-        cpu.SetReading(cpuTemperature?.Value, cpuName, $"Load  {Format(cpuLoad)}");
-        gpu.SetReading(gpuTemperature?.Value, gpuName, $"Load  {Format(gpuLoad)}");
+        cpuAlert = ThermalAlerts.Update(cpuTemperature?.Value, cpuAlert);
+        gpuAlert = ThermalAlerts.Update(gpuTemperature?.Value, gpuAlert);
+        cpu.SetReading(cpuTemperature?.Value, cpuName, $"Load  {Format(cpuLoad)}", cpuAlert);
+        gpu.SetReading(gpuTemperature?.Value, gpuName, $"Load  {Format(gpuLoad)}", gpuAlert);
+        var critical = cpuAlert == TemperatureAlert.Critical || gpuAlert == TemperatureAlert.Critical;
+        thermalFrame.SetCritical(critical);
+        var interval = critical ? 50 : 250;
+        if (visualTimer.Interval != interval)
+            visualTimer.Interval = interval;
 
         var used = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Used" && metric.Unit == "GB")?.Value;
         var free = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Available" && metric.Unit == "GB")?.Value;
@@ -535,6 +589,13 @@ internal sealed class Dashboard : Form
         ram.SetReading(memoryLoad?.Value, "Physical memory", $"In use  {capacity}");
         return cpuTemperature is not null;
     }
+
+    private string CriticalTemperatureMessage() => (cpuAlert, gpuAlert) switch
+    {
+        (TemperatureAlert.Critical, TemperatureAlert.Critical) => "CRITICAL TEMPERATURE • CPU and GPU",
+        (TemperatureAlert.Critical, _) => "CRITICAL TEMPERATURE • CPU",
+        _ => "CRITICAL TEMPERATURE • GPU"
+    };
 
     private static Metric? SelectMetric(IEnumerable<Metric> options, string unit, params string[] preferredNames)
     {
