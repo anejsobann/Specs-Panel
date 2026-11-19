@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Drawing.Drawing2D;
 
 namespace SpecsPanel;
 
@@ -30,6 +29,7 @@ internal static class ThermalAlerts
 
 internal sealed class ThermalFrame : Panel
 {
+    private const double PulsePeriodSeconds = 3.2;
     private static readonly Color Glow = Color.FromArgb(255, 49, 72);
     private long? criticalSince;
 
@@ -65,34 +65,22 @@ internal sealed class ThermalFrame : Panel
     protected override void OnPaint(PaintEventArgs args)
     {
         base.OnPaint(args);
-        if (criticalSince is not long start || Width < 2 * Padding.Horizontal || Height < 2 * Padding.Vertical)
+        if (criticalSince is not long start)
+            return;
+
+        var depth = Math.Min(Math.Min(Padding.Left, Padding.Right), Math.Min(Padding.Top, Padding.Bottom));
+        if (depth == 0 || Width <= 2 * depth || Height <= 2 * depth)
             return;
 
         var elapsed = Stopwatch.GetElapsedTime(start).TotalSeconds;
-        var pulse = .5 + .5 * Math.Cos(2 * Math.PI * elapsed / 1.4);
-        var red = Color.FromArgb((int)(28 + 138 * pulse), Glow);
-        var length = Math.Min(Math.Min(Width, Height) / 3, LogicalToDeviceUnits(190));
-        var right = Width - length;
-        var bottom = Height - length;
-        PaintGlow(args.Graphics, new(0, 0, length, Padding.Top), LinearGradientMode.Horizontal, false, red);
-        PaintGlow(args.Graphics, new(right, 0, length, Padding.Top), LinearGradientMode.Horizontal, true, red);
-        PaintGlow(args.Graphics, new(0, Height - Padding.Bottom, length, Padding.Bottom), LinearGradientMode.Horizontal, false, red);
-        PaintGlow(args.Graphics, new(right, Height - Padding.Bottom, length, Padding.Bottom), LinearGradientMode.Horizontal, true, red);
-        PaintGlow(args.Graphics, new(0, Padding.Top, Padding.Left, length - Padding.Top), LinearGradientMode.Vertical, false, red);
-        PaintGlow(args.Graphics, new(Width - Padding.Right, Padding.Top, Padding.Right, length - Padding.Top), LinearGradientMode.Vertical, false, red);
-        PaintGlow(args.Graphics, new(0, bottom, Padding.Left, length - Padding.Bottom), LinearGradientMode.Vertical, true, red);
-        PaintGlow(args.Graphics, new(Width - Padding.Right, bottom, Padding.Right, length - Padding.Bottom), LinearGradientMode.Vertical, true, red);
-    }
-
-    private static void PaintGlow(Graphics canvas, Rectangle bounds, LinearGradientMode direction, bool reverse, Color red)
-    {
-        if (bounds.Width <= 0 || bounds.Height <= 0)
-            return;
-        var clear = Color.FromArgb(0, red);
-        using var brush = new LinearGradientBrush(bounds, reverse ? clear : red, reverse ? red : clear, direction)
+        var pulse = .5 + .5 * Math.Cos(2 * Math.PI * elapsed / PulsePeriodSeconds);
+        var opacity = 16 + 168 * pulse;
+        using var pen = new Pen(Glow);
+        for (var inset = 0; inset < depth; inset++)
         {
-            WrapMode = WrapMode.TileFlipXY
-        };
-        canvas.FillRectangle(brush, bounds);
+            var fade = 1 - (double)inset / depth;
+            pen.Color = Color.FromArgb((int)(opacity * fade * fade), Glow);
+            args.Graphics.DrawRectangle(pen, inset, inset, Width - 1 - 2 * inset, Height - 1 - 2 * inset);
+        }
     }
 }

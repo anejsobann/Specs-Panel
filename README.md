@@ -12,7 +12,7 @@ Run `./Publish-Local.ps1` in PowerShell with the .NET 10 SDK, then open the `Spe
 
 **System Specs** shows CPU, GPU, and RAM cards with live readings and charts covering the last 60 seconds.
 
-CPU and GPU temperatures turn red at 80 °C. At 88 °C, Specs Panel shows a critical message and pulses the four application corners red, including in fullscreen. The alert clears 2 °C below each threshold to avoid switching repeatedly near the boundary.
+CPU and GPU temperatures turn red at 80 °C. At 88 °C, Specs Panel shows a critical message and pulses all four edges red on a 3.2-second cycle, including in fullscreen. The alert clears 2 °C below each threshold to avoid switching repeatedly near the boundary.
 
 **Processes** lists running processes and their PIDs. Sort by share of total CPU capacity, physical memory (working set), or read and write I/O throughput, which can include network and other devices. CPU and I/O rates need two samples. A dash indicates an unavailable reading.
 
