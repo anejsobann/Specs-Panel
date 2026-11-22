@@ -29,6 +29,8 @@ internal sealed class Dashboard : Form
     private List<ProcessUsage> processUsage = [];
     private bool samplingProcesses;
     private readonly Button cpuHelp = new() { AutoSize = true, FlatStyle = FlatStyle.Flat, Visible = false };
+    private readonly CancellationTokenSource pawnIoDownload = new();
+    private string? pawnIoInstaller;
     private readonly MetricCard cpu = new("CPU", "°C", Accent);
     private readonly MetricCard gpu = new("GPU", "°C", Color.FromArgb(109, 184, 255));
     private readonly MetricCard ram = new("RAM", "%", Color.FromArgb(187, 155, 255));
@@ -123,11 +125,13 @@ internal sealed class Dashboard : Form
             UpdateClock();
             visualTimer.Start();
             timer.Start();
-            await RefreshDashboard();
+            await Task.WhenAll(RefreshDashboard(), DownloadPawnIoAsync());
         };
         FormClosed += (_, _) =>
         {
             closing = true;
+            pawnIoDownload.Cancel();
+            pawnIoDownload.Dispose();
             timer.Dispose();
             if (!reading)
                 reader.Dispose();
@@ -384,18 +388,43 @@ internal sealed class Dashboard : Form
             Location = display.WorkingArea.Location;
     }
 
+    private async Task DownloadPawnIoAsync()
+    {
+        if (HardwareReader.PawnIoInstalled)
+            return;
+
+        cpuHelp.Enabled = false;
+        try
+        {
+            pawnIoInstaller = await PawnIoDownload.GetInstallerAsync(pawnIoDownload.Token);
+        }
+        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException
+            or UnauthorizedAccessException or OperationCanceledException)
+        {
+            Debug.WriteLine($"PawnIO download failed: {error.Message}");
+        }
+        finally
+        {
+            if (!closing)
+                cpuHelp.Enabled = true;
+        }
+    }
+
     private void OpenCpuHelp()
     {
         try
         {
-            var start = HardwareReader.PawnIoInstalled
-                ? new System.Diagnostics.ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true, Verb = "runas" }
-                : new System.Diagnostics.ProcessStartInfo("https://github.com/namazso/PawnIO.Setup/releases") { UseShellExecute = true };
-            if (HardwareReader.PawnIoInstalled)
+            var installed = HardwareReader.PawnIoInstalled;
+            var start = installed
+                ? new ProcessStartInfo(Application.ExecutablePath) { UseShellExecute = true, Verb = "runas" }
+                : new ProcessStartInfo(PawnIoDownload.ReleasesUrl) { UseShellExecute = true };
+            if (installed)
                 foreach (var argument in ViewArguments())
                     start.ArgumentList.Add(argument);
-            using var started = System.Diagnostics.Process.Start(start);
-            if (HardwareReader.PawnIoInstalled && started is not null)
+            else if (File.Exists(pawnIoInstaller))
+                start = new ProcessStartInfo("explorer.exe", $"/select,\"{pawnIoInstaller}\"") { UseShellExecute = true };
+            using var started = Process.Start(start);
+            if (installed && started is not null)
                 Close();
         }
         catch (System.ComponentModel.Win32Exception error) when (error.NativeErrorCode == 1223)
@@ -562,7 +591,10 @@ internal sealed class Dashboard : Form
             }
             var showCpuHelp = !cpuAvailable && (!HardwareReader.PawnIoInstalled || !HardwareReader.IsAdministrator);
             cpuHelp.Visible = showCpuHelp;
-            cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Run as administrator to read CPU temperature" : "Download PawnIO for CPU temperature";
+            cpuHelp.Text = HardwareReader.PawnIoInstalled ? "Run as administrator to read CPU temperature"
+                : !cpuHelp.Enabled ? "Downloading PawnIO…"
+                : File.Exists(pawnIoInstaller) ? "Show PawnIO installer"
+                : "Download PawnIO for CPU temperature";
             SetMeasurementStatus(!cpuAvailable && !showCpuHelp
                 ? "CPU temperature sensor returned no reading."
                 : metrics.Any(metric => metric.Value.HasValue)

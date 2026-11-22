@@ -8,7 +8,7 @@ Windows dashboard for monitoring your PC on a second display, including any tabl
 
 ## Download and run
 
-On a Windows x64 PC, download the asset ending in `-win-x64.zip` from the [latest release](https://github.com/anejsobann/Specs-Panel/releases/latest). Extract the entire ZIP to a folder and open `SpecsPanel.exe`. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+On a Windows x64 PC, download the asset ending in `-win-x64.zip` from the [latest release](https://github.com/anejsobann/Specs-Panel/releases/latest). Extract the entire ZIP to a folder and double-click `Start SpecsPanel.cmd`. The `App` folder contains the executable and its supporting files. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
 
 1. Connect your tablet as a second display. [spacedesk](https://www.spacedesk.net/download/) offers viewers for Android tablets, iPads, and Windows tablets. You can also use another display solution that adds an extended display to Windows.
 2. In Windows display settings, choose **Extend these displays**. Use **Identify** to check the tablet's display number.
@@ -28,7 +28,7 @@ Click or tap the **Specs Panel** title and choose **Test Temperature Alert** to 
 
 **Sensors** shows detailed readings for your motherboard, drives, clock speeds, and fans when available.
 
-[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) uses the [PawnIO](https://github.com/namazso/PawnIO.Setup/releases) driver on supported Ryzen processors. If the driver is missing, use the download button under **System Specs**.
+[LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) uses the [PawnIO](https://github.com/namazso/PawnIO.Setup/releases) driver on supported Ryzen processors. If PawnIO is missing, Specs Panel downloads the installer in the background at startup. If CPU temperature is unavailable, click **Show PawnIO installer** under **System Specs** to locate the downloaded file, then run it to install the driver. If the automatic download fails, the button opens the official releases page.
 
 ## Build from source
 
