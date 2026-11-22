@@ -3,29 +3,45 @@ name: Publish Windows release
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-windows.yml']
+    paths: ['Release-Version.txt']
   workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: publish-windows
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: windows-latest
     env:
-      RELEASE_TAG: v0.3.1
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
-      - name: Build Windows ZIP
+      - name: Build Windows packages
         shell: pwsh
-        run: ./Publish-Release.ps1
+        run: |
+          $version = (Get-Content Release-Version.txt -Raw).Trim()
+          $baselineDir = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'update-baselines')
+          $tags = gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false and any(.assets[]; .name == "SpecsPanel-win-x64.json")) | .tag_name'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $baselines = @(foreach ($tag in $tags) {
+              if ($tag -notmatch '^v(\d+\.\d+\.\d+)$' -or [version]$Matches[1] -ge [version]$version) { continue }
+              $path = Join-Path $baselineDir.FullName "$tag.json"
+              gh release download $tag --pattern SpecsPanel-win-x64.json --output $path
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              $path
+          })
+          ./Publish-Release.ps1 -Version $version -PreviousManifests $baselines
       - name: Publish GitHub release
         shell: pwsh
         run: |
-          $asset = 'Specs Panel/bin/Packages/SpecsPanel-win-x64.zip'
-          gh release create $env:RELEASE_TAG $asset --target $env:GITHUB_SHA --title "Specs Panel $env:RELEASE_TAG" --notes "Extract the ZIP and double-click Start SpecsPanel.cmd. Specs Panel downloads the PawnIO installer on startup when the driver is missing."
+          $tag = 'v' + (Get-Content Release-Version.txt -Raw).Trim()
+          $assets = @(Get-ChildItem 'Specs Panel/bin/Packages' -File | ForEach-Object FullName)
+          gh release create $tag @assets --target $env:GITHUB_SHA --title "Specs Panel $tag" --notes "For a fresh install, extract SpecsPanel-win-x64.zip and open Start SpecsPanel.cmd. Starting with v0.3.2, the Update button downloads a package containing only changed files."
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

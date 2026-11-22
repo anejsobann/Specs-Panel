@@ -30,6 +30,10 @@ internal sealed class Dashboard : Form
     private bool samplingProcesses;
     private readonly Button cpuHelp = new() { AutoSize = true, FlatStyle = FlatStyle.Flat, Visible = false };
     private readonly CancellationTokenSource pawnIoDownload = new();
+    private readonly CancellationTokenSource releaseUpdate = new();
+    private readonly System.Windows.Forms.Timer updateTimer = new() { Interval = 30 * 60 * 1000 };
+    private readonly Button updateButton = new() { Text = "Update", AutoSize = true, Visible = false };
+    private ReleaseUpdate.Manifest? offeredUpdate;
     private string? pawnIoInstaller;
     private readonly MetricCard cpu = new("CPU", "°C", Accent);
     private readonly MetricCard gpu = new("GPU", "°C", Color.FromArgb(109, 184, 255));
@@ -110,6 +114,8 @@ internal sealed class Dashboard : Form
 
         displays.Click += (_, _) => OpenDisplayMenu();
         fullscreen.Click += (_, _) => ToggleFullscreen();
+        updateButton.Click += async (_, _) => await InstallReleaseUpdateAsync();
+        updateTimer.Tick += async (_, _) => await CheckReleaseUpdateAsync();
         timer.Tick += async (_, _) => await RefreshDashboard();
         visualTimer.Tick += (_, _) =>
         {
@@ -125,11 +131,15 @@ internal sealed class Dashboard : Form
             UpdateClock();
             visualTimer.Start();
             timer.Start();
-            await Task.WhenAll(RefreshDashboard(), DownloadPawnIoAsync());
+            updateTimer.Start();
+            await Task.WhenAll(RefreshDashboard(), DownloadPawnIoAsync(), CheckReleaseUpdateAsync());
         };
         FormClosed += (_, _) =>
         {
             closing = true;
+            updateTimer.Dispose();
+            releaseUpdate.Cancel();
+            releaseUpdate.Dispose();
             pawnIoDownload.Cancel();
             pawnIoDownload.Dispose();
             timer.Dispose();
@@ -168,8 +178,9 @@ internal sealed class Dashboard : Form
         displays.AccessibleName = "Select display";
         ConfigureMenu(displayMenu);
         StyleButton(fullscreen);
+        StyleButton(updateButton);
         var controls = new FlowLayoutPanel { AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false };
-        controls.Controls.AddRange([displays, fullscreen]);
+        controls.Controls.AddRange([updateButton, displays, fullscreen]);
         header.Controls.AddRange([brand, clock, controls]);
 
         header.Layout += (_, _) =>
@@ -386,6 +397,59 @@ internal sealed class Dashboard : Form
             ToggleFullscreen();
         else if (Screen.FromControl(this).DeviceName != display.DeviceName)
             Location = display.WorkingArea.Location;
+    }
+
+    private async Task CheckReleaseUpdateAsync()
+    {
+        if (!updateButton.Enabled)
+            return;
+
+        try
+        {
+            var available = await ReleaseUpdate.CheckAsync(releaseUpdate.Token);
+            if (closing || !updateButton.Enabled)
+                return;
+            offeredUpdate = available;
+            updateButton.Visible = available is not null;
+            if (available is not null)
+                updateButton.AccessibleName = $"Update to {available.Version}";
+        }
+        catch (Exception error) when (error is HttpRequestException or System.Text.Json.JsonException
+            or IOException or OperationCanceledException)
+        {
+            Debug.WriteLine($"Update check failed: {error.Message}");
+        }
+    }
+
+    private async Task InstallReleaseUpdateAsync()
+    {
+        if (offeredUpdate is null)
+            return;
+
+        updateButton.Enabled = false;
+        updateButton.Text = "Updating…";
+        try
+        {
+            if (!await ReleaseUpdate.InstallAsync(offeredUpdate, ViewArguments(), releaseUpdate.Token))
+                throw new IOException("The updated application could not start.");
+            if (!closing)
+                Close();
+        }
+        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException
+            or UnauthorizedAccessException or OperationCanceledException or System.ComponentModel.Win32Exception)
+        {
+            if (!closing)
+                MessageBox.Show(this, $"The update could not be completed.\n\n{error.Message}", "Specs Panel",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            if (!closing)
+            {
+                updateButton.Enabled = true;
+                updateButton.Text = "Update";
+            }
+        }
     }
 
     private async Task DownloadPawnIoAsync()

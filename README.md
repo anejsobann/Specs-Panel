@@ -8,7 +8,9 @@ Windows dashboard for monitoring your PC on a second display, including any tabl
 
 ## Download and run
 
-On a Windows x64 PC, download the asset ending in `-win-x64.zip` from the [latest release](https://github.com/anejsobann/Specs-Panel/releases/latest). Extract the entire ZIP to a folder and double-click `Start SpecsPanel.cmd`. The `App` folder contains the executable and its supporting files. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+On a Windows x64 PC, download `SpecsPanel-win-x64.zip` from the [latest release](https://github.com/anejsobann/Specs-Panel/releases/latest). Extract the entire ZIP to a folder and double-click `Start SpecsPanel.cmd`. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+
+Starting with v0.3.2, **Update** appears when a newer release is available. Click it to download only new and changed files, verify the update, and reopen Specs Panel with the same display, tab, and fullscreen mode. Keep using `Start SpecsPanel.cmd` to launch the newest installed version.
 
 1. Connect your tablet as a second display. [spacedesk](https://www.spacedesk.net/download/) offers viewers for Android tablets, iPads, and Windows tablets. You can also use another display solution that adds an extended display to Windows.
 2. In Windows display settings, choose **Extend these displays**. Use **Identify** to check the tablet's display number.
@@ -31,5 +33,7 @@ Click or tap the **Specs Panel** title and choose **Test Temperature Alert** to 
 [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor) uses the [PawnIO](https://github.com/namazso/PawnIO.Setup/releases) driver on supported Ryzen processors. If PawnIO is missing, Specs Panel downloads the installer in the background at startup. If CPU temperature is unavailable, click **Show PawnIO installer** under **System Specs** to locate the downloaded file, then run it to install the driver. If the automatic download fails, the button opens the official releases page.
 
 ## Build from source
+
+To publish a new GitHub release, bump `Release-Version.txt` on `main`. GitHub Actions publishes the full ZIP, the file manifest, and incremental ZIPs for earlier releases with manifests.
 
 With the .NET 10 SDK installed, run `./Publish-Local.ps1` in PowerShell and open the `SpecsPanel.exe` at the printed path. The script creates a separate directory for each build under `Specs Panel/bin/Local`. An open instance running with administrator access automatically switches to a newer local build and keeps its selected tab, display, and fullscreen mode.
