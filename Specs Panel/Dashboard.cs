@@ -23,7 +23,9 @@ internal sealed class Dashboard : Form
     private readonly Panel[] pages = [new(), new(), new()];
     private readonly Button[] navigation = new Button[3];
     private int selectedPage;
-    private readonly ComboBox processSort = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 160 };
+    private readonly Button processSort = new() { Text = "CPU  ▾", AutoSize = true, MinimumSize = new Size(160, 0), TextAlign = ContentAlignment.MiddleLeft };
+    private readonly ContextMenuStrip processSortMenu = new() { ShowImageMargin = false, ShowCheckMargin = true };
+    private int processSortIndex;
     private readonly Label processStatus = new() { Dock = DockStyle.Fill, ForeColor = Muted, TextAlign = ContentAlignment.MiddleLeft };
     private readonly ProcessReader processReader = new();
     private List<ProcessUsage> processUsage = [];
@@ -150,6 +152,7 @@ internal sealed class Dashboard : Form
         {
             visualTimer.Dispose();
             displayMenu.Dispose();
+            processSortMenu.Dispose();
             titleMenu.Dispose();
         };
     }
@@ -227,28 +230,6 @@ internal sealed class Dashboard : Form
         button.Cursor = Cursors.Hand;
     }
 
-    private static void StylePicker(ComboBox picker)
-    {
-        picker.FlatStyle = FlatStyle.Flat;
-        picker.BackColor = Surface;
-        picker.ForeColor = Ink;
-        picker.DrawMode = DrawMode.OwnerDrawFixed;
-        picker.ItemHeight = 25;
-        picker.DrawItem += (_, args) =>
-        {
-            var highlighted = (args.State & DrawItemState.Selected) != 0 &&
-                (args.State & DrawItemState.ComboBoxEdit) == 0;
-            using var fill = new SolidBrush(highlighted ? Color.FromArgb(25, 61, 69) : Surface);
-            args.Graphics.FillRectangle(fill, args.Bounds);
-            if (args.Index < 0)
-                return;
-            var textBounds = Rectangle.Inflate(args.Bounds, -6, 0);
-            TextRenderer.DrawText(args.Graphics, picker.GetItemText(picker.Items[args.Index]), picker.Font,
-                textBounds, Ink, TextFormatFlags.NoPrefix | TextFormatFlags.VerticalCenter |
-                TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis);
-        };
-    }
-
     private void SelectPage(int index)
     {
         selectedPage = index;
@@ -300,17 +281,29 @@ internal sealed class Dashboard : Form
         var filter = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         filter.Controls.Add(new Label { Text = "Sort by", AutoSize = true, Margin = new Padding(4, 6, 8, 4) });
         filter.Controls.Add(processSort);
-        StylePicker(processSort);
+        StyleButton(processSort);
+        ConfigureMenu(processSortMenu);
         processSort.AccessibleName = "Sort processes by";
-        processSort.Items.AddRange(["CPU", "RAM", "I/O"]);
-        processSort.SelectedIndex = 0;
-        processSort.SelectedIndexChanged += (_, _) => RenderProcesses();
+        foreach (var label in new[] { "CPU", "RAM", "I/O" })
+        {
+            var index = processSortMenu.Items.Count;
+            var item = new ToolStripMenuItem(label) { ForeColor = Ink, Padding = new Padding(4, 6, 12, 6) };
+            item.Click += (_, _) => SelectProcessSort(index);
+            processSortMenu.Items.Add(item);
+        }
+        processSort.Click += (_, _) =>
+        {
+            for (var index = 0; index < processSortMenu.Items.Count; index++)
+                ((ToolStripMenuItem)processSortMenu.Items[index]).Checked = index == processSortIndex;
+            processSortMenu.MinimumSize = new Size(processSort.Width, 0);
+            processSortMenu.Show(processSort, new Point(0, processSort.Height));
+        };
         panel.Controls.Add(filter, 0, 0);
         ConfigureGrid(processes, ("Process", 44), ("PID", 12), ("CPU (%)", 14), ("RAM (MiB)", 15), ("I/O (MiB/s)", 15));
         processes.ColumnHeaderMouseClick += (_, eventArgs) =>
         {
             if (eventArgs.ColumnIndex is >= 2 and <= 4)
-                processSort.SelectedIndex = eventArgs.ColumnIndex - 2;
+                SelectProcessSort(eventArgs.ColumnIndex - 2);
         };
         panel.Controls.Add(processes, 0, 1);
         processStatus.Text = "Collecting process data…";
@@ -353,9 +346,18 @@ internal sealed class Dashboard : Form
         }
     }
 
+    private void SelectProcessSort(int index)
+    {
+        processSortIndex = index;
+        var label = processSortMenu.Items[index].Text;
+        processSort.Text = $"{label}  ▾";
+        processSort.AccessibleName = $"Sort processes by {label}";
+        RenderProcesses();
+    }
+
     private void RenderProcesses()
     {
-        var sort = processSort.SelectedIndex;
+        var sort = processSortIndex;
         var ordered = processUsage.OrderByDescending(row => sort switch
         {
             1 => row.MemoryMiB,
