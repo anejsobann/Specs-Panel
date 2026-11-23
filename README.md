@@ -2,13 +2,15 @@
 
 Windows dashboard for monitoring your PC on a second display, including any tablet that Windows can use as an extended display.
 
+**[Download Specs Panel for Windows (ZIP)](https://github.com/anejsobann/Specs-Panel/releases/latest/download/SpecsPanel-win-x64.zip)**
+
 ![Specs Panel dashboard showing CPU and GPU temperatures, RAM usage, and 60-second charts](docs/images/system-specs.png)
 
 *Dashboard preview with sample readings.*
 
 ## Download and run
 
-On a Windows x64 PC, download `SpecsPanel-win-x64.zip` from the [latest release](https://github.com/anejsobann/Specs-Panel/releases/latest). Extract the entire ZIP to a folder and double-click `Start SpecsPanel.cmd`. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+Extract the entire Windows ZIP to a folder and double-click `Start SpecsPanel.cmd`. The Windows executable is in `App/SpecsPanel.exe`. The GitHub **Code → Download ZIP** menu downloads the source code. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
 
 Starting with v0.3.2, **Update** appears when a newer release is available. Click it to download only new and changed files, verify the update, and reopen Specs Panel with the same display, tab, and fullscreen mode. Keep using `Start SpecsPanel.cmd` to launch the newest installed version.
 
