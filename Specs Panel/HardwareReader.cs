@@ -27,6 +27,7 @@ internal sealed class HardwareReader : IDisposable
     };
 
     private bool opened;
+    public string MemoryDescription { get; private set; } = "Physical memory";
 
     public List<Metric> Read()
     {
@@ -34,6 +35,21 @@ internal sealed class HardwareReader : IDisposable
         {
             computer.Open();
             opened = true;
+            var modules = computer.SMBios?.MemoryDevices?.Where(module => module.Size > 0).ToArray() ?? [];
+            var brands = modules.Select(module => module.ManufacturerName?.Trim())
+                .Where(brand => !string.IsNullOrWhiteSpace(brand) &&
+                    !string.Equals(brand, "Unknown", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(brand, "Not Specified", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
+            var brandName = string.Join(" / ", brands);
+            if (brandName.Length > 0)
+                MemoryDescription = brandName;
+
+            var speeds = modules.Select(module => module.ConfiguredSpeed)
+                .Where(speed => speed > 0 && speed != 0xFFFF)
+                .Distinct().Order().ToArray();
+            if (speeds.Length > 0)
+                MemoryDescription += $" · {string.Join("/", speeds)} MT/s";
         }
 
         var metrics = new List<Metric>();

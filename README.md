@@ -18,7 +18,7 @@ Starting with v0.3.2, **Update** appears when a newer release is available. Clic
 2. In Windows display settings, choose **Extend these displays**. Use **Identify** to check the tablet's display number.
 3. Select the tablet in Specs Panel and click **Fullscreen**. Press **Esc** or **F11** to return to windowed mode.
 
-**System Specs** shows CPU, GPU, and RAM cards with live readings and charts covering the last 60 seconds.
+**System Specs** shows CPU, GPU, and RAM cards with live readings and charts covering the last 60 seconds. The RAM card shows the module manufacturer and configured speed in MT/s when the firmware reports them.
 
 CPU and GPU temperatures turn red at 80 °C. At 88 °C, Specs Panel shows a critical message and pulses all four edges red on a 3.2-second cycle, including in fullscreen. The alert clears 2 °C below each threshold to avoid switching repeatedly near the boundary.
 

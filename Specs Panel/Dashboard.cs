@@ -701,7 +701,7 @@ internal sealed class Dashboard : Form
         var used = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Used" && metric.Unit == "GB")?.Value;
         var free = memory.FirstOrDefault(metric => metric.Device == memoryLoad?.Device && metric.Name == "Memory Available" && metric.Unit == "GB")?.Value;
         var capacity = used.HasValue && free.HasValue ? $"{used:0.#} / {used + free:0.#} GB" : "—";
-        ram.SetReading(memoryLoad?.Value, "Physical memory", $"In use  {capacity}");
+        ram.SetReading(memoryLoad?.Value, reader.MemoryDescription, $"In use  {capacity}");
         return cpuTemperature is not null;
     }
 
