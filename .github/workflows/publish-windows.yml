@@ -28,20 +28,65 @@ jobs:
         run: |
           $version = (Get-Content Release-Version.txt -Raw).Trim()
           $baselineDir = New-Item -ItemType Directory -Path (Join-Path $env:RUNNER_TEMP 'update-baselines')
-          $tags = gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false and any(.assets[]; .name == "SpecsPanel-win-x64.json")) | .tag_name'
+          $releases = gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false) | [.tag_name, any(.assets[]; .name == "SpecsPanel-win-x64.json"), any(.assets[]; .name == "SpecsPanel-update-history.json")] | @tsv'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $baselines = @(foreach ($tag in $tags) {
+          $history = @{}
+          foreach ($release in $releases) {
+              $tag, $hasManifest, $hasHistory = $release -split "`t"
               if ($tag -notmatch '^v(\d+\.\d+\.\d+)$' -or [version]$Matches[1] -ge [version]$version) { continue }
+              $baselineVersion = $Matches[1]
+              if ($hasHistory -eq 'true') {
+                  $historyPath = Join-Path $baselineDir.FullName "$tag-history.json"
+                  gh release download $tag --pattern SpecsPanel-update-history.json --output $historyPath
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                  $savedHistory = Get-Content -LiteralPath $historyPath -Raw | ConvertFrom-Json -AsHashtable
+                  foreach ($entry in $savedHistory.GetEnumerator()) {
+                      $history[$entry.Key] = $entry.Value
+                  }
+              }
+              if ($hasManifest -ne 'true') { continue }
               $path = Join-Path $baselineDir.FullName "$tag.json"
               gh release download $tag --pattern SpecsPanel-win-x64.json --output $path
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              $history[$baselineVersion] = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json -AsHashtable
+          }
+          $baselines = @(foreach ($baseline in $history.GetEnumerator()) {
+              if ($baseline.Key -notmatch '^\d+\.\d+\.\d+$' -or $baseline.Key -ne $baseline.Value.version) {
+                  throw "Invalid saved baseline version: $($baseline.Key)"
+              }
+              $path = Join-Path $baselineDir.FullName "baseline-$($baseline.Key).json"
+              $baseline.Value | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $path -Encoding utf8
               $path
           })
           ./Publish-Release.ps1 -Version $version -PreviousManifests $baselines
+          $history | ConvertTo-Json -Depth 6 |
+              Set-Content -LiteralPath 'Specs Panel/bin/Packages/SpecsPanel-update-history.json' -Encoding utf8
       - name: Publish GitHub release
         shell: pwsh
         run: |
           $tag = 'v' + (Get-Content Release-Version.txt -Raw).Trim()
           $assets = @(Get-ChildItem 'Specs Panel/bin/Packages' -File | ForEach-Object FullName)
-          gh release create $tag @assets --target $env:GITHUB_SHA --title "Specs Panel $tag" --notes "For a fresh install, extract SpecsPanel-win-x64.zip and open Start SpecsPanel.cmd. Starting with v0.3.2, the Update button downloads a package containing only changed files."
+          gh release create $tag @assets --target $env:GITHUB_SHA --latest --title "Specs Panel $tag" --notes "For a fresh install, extract SpecsPanel-win-x64.zip and open Start SpecsPanel.cmd. Starting with v0.3.2, the Update button downloads a package containing only changed files."
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Remove older published Windows releases
+        shell: pwsh
+        run: |
+          $version = (Get-Content Release-Version.txt -Raw).Trim()
+          $tag = "v$version"
+          $latestJson = gh api "repos/$env:GITHUB_REPOSITORY/releases/latest"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $latest = $latestJson | ConvertFrom-Json
+          if ($latest.tag_name -ne $tag) { throw "Expected $tag to be the latest release." }
+          foreach ($file in Get-ChildItem 'Specs Panel/bin/Packages' -File) {
+              $asset = $latest.assets | Where-Object name -EQ $file.Name
+              if ($asset.state -ne 'uploaded' -or $asset.size -ne $file.Length) {
+                  throw "Release asset missing or incomplete: $($file.Name)"
+              }
+          }
+          $older = gh api --paginate "repos/$env:GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false and any(.assets[]; .name | endswith("-win-x64.zip"))) | .tag_name'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($oldTag in $older) {
+              if ($oldTag -notmatch '^v(\d+\.\d+\.\d+)$' -or [version]$Matches[1] -ge [version]$version) { continue }
+              gh release delete $oldTag --yes
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }

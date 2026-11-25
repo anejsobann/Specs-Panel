@@ -10,7 +10,7 @@ Windows dashboard for monitoring your PC on a second display, including any tabl
 
 ## Download and run
 
-Extract the entire Windows ZIP to a folder and double-click `Start SpecsPanel.cmd`. The Windows executable is in `App/SpecsPanel.exe`. The GitHub **Code → Download ZIP** menu downloads the source code. The ZIP includes the .NET Desktop Runtime and application dependencies. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+Extract the entire ZIP to a folder and double-click `Start SpecsPanel.cmd`. The Windows ZIP includes the .NET Desktop Runtime and application dependencies. If you downloaded through **Code → Download ZIP**, the launcher downloads and extracts the latest Windows release into the `Windows App` folder on first launch. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
 
 Starting with v0.3.2, **Update** appears when a newer release is available. Click it to download only new and changed files, verify the update, and reopen Specs Panel with the same display, tab, and fullscreen mode. Keep using `Start SpecsPanel.cmd` to launch the newest installed version.
 
