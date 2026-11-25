@@ -4,7 +4,7 @@ Windows dashboard for monitoring your PC on a second display, including any tabl
 
 **[Download Specs Panel for Windows (ZIP)](https://github.com/anejsobann/Specs-Panel/releases/latest/download/SpecsPanel-win-x64.zip)**
 
-![Specs Panel dashboard showing CPU and GPU temperatures, RAM usage, and 60-second charts](docs/images/system-specs.png)
+![Specs Panel dashboard showing the clock, CPU and GPU temperatures, RAM manufacturer and speed, and 60-second charts](docs/images/system-specs.png)
 
 *Dashboard preview with sample readings.*
 

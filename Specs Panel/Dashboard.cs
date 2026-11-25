@@ -174,7 +174,7 @@ internal sealed class Dashboard : Form
                 titleMenu.Show(brand, new Point(0, brand.Height));
         };
         brand.AccessibleDescription = "Opens the temperature alert test menu.";
-        clock.Font = new Font(Font.FontFamily, 16, FontStyle.Bold);
+        clock.Font = new Font(Font.FontFamily, 18, FontStyle.Bold);
         UpdateClock();
 
         StyleButton(displays);
