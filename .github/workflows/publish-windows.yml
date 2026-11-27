@@ -66,7 +66,7 @@ jobs:
         run: |
           $tag = 'v' + (Get-Content Release-Version.txt -Raw).Trim()
           $assets = @(Get-ChildItem 'Specs Panel/bin/Packages' -File | ForEach-Object FullName)
-          gh release create $tag @assets --target $env:GITHUB_SHA --latest --title "Specs Panel $tag" --notes "For a fresh install, extract SpecsPanel-win-x64.zip and open Start SpecsPanel.cmd. Starting with v0.3.2, the Update button downloads a package containing only changed files."
+          gh release create $tag @assets --target $env:GITHUB_SHA --latest --title "Specs Panel $tag" --notes "For a fresh install, extract SpecsPanel-win-x64.zip and open SpecsPanel.exe. Starting with v0.3.2, the Update button downloads a package containing only changed files."
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Remove older published Windows releases
         shell: pwsh

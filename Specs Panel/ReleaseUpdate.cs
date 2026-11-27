@@ -26,7 +26,8 @@ internal static class ReleaseUpdate
         {
             var app = new DirectoryInfo(AppContext.BaseDirectory);
             var root = app.Parent?.Name == "Updates" ? app.Parent.Parent : app.Parent;
-            return root is not null && File.Exists(Path.Combine(root.FullName, "Start SpecsPanel.cmd"))
+            return root is not null && (File.Exists(Path.Combine(root.FullName, "SpecsPanel.exe")) ||
+                File.Exists(Path.Combine(root.FullName, "Start SpecsPanel.cmd")))
                 ? Path.Combine(root.FullName, "Updates")
                 : null;
         }
@@ -53,8 +54,12 @@ internal static class ReleaseUpdate
         if (UpdateDirectory is null)
             return null;
 
-        using var release = await Client.GetFromJsonAsync<JsonDocument>(
-            $"https://api.github.com/repos/{Repository}/releases/latest", cancellationToken);
+        using var request = new HttpRequestMessage(HttpMethod.Get,
+            $"https://api.github.com/repos/{Repository}/releases/latest");
+        request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue { NoCache = true };
+        using var response = await Client.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+        using var release = await response.Content.ReadFromJsonAsync<JsonDocument>(cancellationToken);
         var tag = release!.RootElement.GetProperty("tag_name").GetString();
         var version = tag?.StartsWith('v') == true ? ParseVersion(tag[1..]) : null;
         if (version <= ParseVersion(CurrentVersion) || version is null)

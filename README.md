@@ -10,9 +10,9 @@ Windows dashboard for monitoring your PC on a second display, including any tabl
 
 ## Download and run
 
-Extract the entire ZIP to a folder and double-click `Start SpecsPanel.cmd`. The Windows ZIP includes the .NET Desktop Runtime and application dependencies. If you downloaded through **Code → Download ZIP**, the launcher downloads and extracts the latest Windows release into the `Windows App` folder on first launch. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
+Extract the entire ZIP to a folder and double-click `SpecsPanel.exe` in the top-level folder. The Windows ZIP includes the .NET Desktop Runtime and application dependencies. If you downloaded through **Code → Download ZIP**, the launcher downloads and extracts the latest Windows release into the `Windows App` folder on first launch. Approve the Windows UAC prompt if it appears. Specs Panel uses administrator access to read CPU temperature sensors.
 
-Starting with v0.3.2, **Update** appears when a newer release is available. Click it to download only new and changed files, verify the update, and reopen Specs Panel with the same display, tab, and fullscreen mode. Keep using `Start SpecsPanel.cmd` to launch the newest installed version.
+Specs Panel checks for a newer release at startup and shows **Update** when one is available. Click it to download only new and changed files, verify the update, and reopen Specs Panel with the same display, tab, and fullscreen mode. Keep using the top-level `SpecsPanel.exe` to launch the newest installed version.
 
 1. Connect your tablet as a second display. [spacedesk](https://www.spacedesk.net/download/) offers viewers for Android tablets, iPads, and Windows tablets. You can also use another display solution that adds an extended display to Windows.
 2. In Windows display settings, choose **Extend these displays**. Use **Identify** to check the tablet's display number.

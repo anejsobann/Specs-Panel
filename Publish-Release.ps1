@@ -20,20 +20,7 @@ try {
         throw 'The publish output is missing SpecsPanel.exe.'
     }
 
-    @'
-@echo off
-if not exist "%~dp0App\SpecsPanel.exe" (
-    echo Extract the entire ZIP before starting Specs Panel.
-    pause
-    exit /b 1
-)
-start "" /D "%~dp0App" "%~dp0App\SpecsPanel.exe"
-if errorlevel 1 (
-    echo Specs Panel could not start.
-    pause
-    exit /b 1
-)
-'@ | Set-Content -LiteralPath (Join-Path $staging 'Start SpecsPanel.cmd') -Encoding Ascii
+    & (Join-Path $PSScriptRoot 'Launcher/Build.ps1') -OutputPath (Join-Path $staging 'SpecsPanel.exe')
 
     $pendingZip = "$staging.zip"
     Compress-Archive -Path (Join-Path $staging '*') -DestinationPath $pendingZip
